@@ -19,6 +19,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 // ---------- args ----------
 const argv = process.argv.slice(2);
@@ -260,7 +261,12 @@ function validateCapture(captureRel) {
 // config reader instead of duplicating them. This block must NOT run on import — guard it so only
 // `node context.mjs ...` executes it. tools/classifier/test.mjs spawns this as a subprocess, so the
 // guard doesn't affect it.
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Use pathToFileURL(argv[1]) — NOT `file://${argv[1]}` — so the guard matches even when argv[1]
+// goes through a symlink (e.g. macOS /tmp -> /private/tmp) or a `.engine/` CI checkout, where the
+// naive string differs from the symlink-resolved import.meta.url and the block silently never runs.
+// Guard argv[1] (undefined when this module is imported, not run) so pathToFileURL doesn't throw —
+// the reviewer (tools/reviewer/validate-ingest.mjs) imports this file for its exported helpers.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const cfg = readConfig();
   const pack = {
     generated_by: "tools/classifier/context.mjs",
