@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brain — jeden plugin, pamięć każdego zespołu</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c2230; --line:#2b3444;
+    --ink:#e6edf3; --dim:#9aa7b8; --faint:#6b7888;
+    --eng:#5fb0e6; --know:#2bb6a6; --mech:#5fb0e6; --human:#e879c4; --brain:#2bb6a6;
+    --ok:#5ad19a; --warn:#f0c54a; --bad:#f06d6d;
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:
+    radial-gradient(1100px 520px at 80% -10%, rgba(43,182,166,.10), transparent 60%),
+    radial-gradient(900px 480px at 10% 110%, rgba(95,176,230,.08), transparent 55%),
+    var(--bg);
+    color:var(--ink);
+    font:15px/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+  a{color:var(--brain);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{max-width:960px;margin:0 auto;padding:26px 20px 90px}
+  header h1{font-size:31px;margin:0 0 6px;letter-spacing:-.4px}
+  header h1 b{color:var(--brain)}
+  header .one{color:var(--dim);margin:0 0 8px;max-width:800px;font-size:16px}
+  .langbar{font-size:12.5px;color:var(--faint);margin:0 0 6px}
+  .langbar a{color:var(--eng)}
+  .hint{font-size:12px;color:var(--faint);margin:2px 0 16px}
+  .hint b{color:var(--dim)}
+  nav.toc{position:sticky;top:0;background:linear-gradient(var(--bg),var(--bg) 72%,transparent);
+    padding:10px 0 12px;margin:0 0 10px;z-index:5;border-bottom:1px solid var(--line)}
+  nav.toc button{background:var(--panel);border:1px solid var(--line);color:var(--dim);white-space:nowrap;
+    padding:6px 11px;border-radius:999px;cursor:pointer;font-size:12px;transition:.15s ease;margin:0 6px 6px 0}
+  nav.toc button:hover{color:var(--ink);border-color:#3a4658}
+  nav.toc button.on{background:var(--brain);color:#04211d;border-color:var(--brain);font-weight:600}
+  section{display:none;animation:fade .28s ease}
+  section.on{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+  .kicker{font-size:10.5px;text-transform:uppercase;letter-spacing:.9px;font-weight:700;color:var(--faint);margin:6px 0 2px}
+  h2{font-size:24px;margin:2px 0 8px;letter-spacing:-.3px}
+  .lead{color:var(--dim);font-size:16.5px;margin:0 0 16px;max-width:800px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:17px 19px;margin:0 0 13px}
+  .panel h3{margin:0 0 8px;font-size:15px}
+  ul{margin:6px 0 0;padding-left:20px} li{margin:5px 0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media(max-width:700px){.grid2,.grid3{grid-template-columns:1fr}}
+  .card{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2)}
+  .card .t{font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px}
+  .card .d{color:var(--dim);font-size:13px;margin-top:5px}
+  .flaw{color:var(--bad);font-weight:600;font-size:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0 0;overflow:hidden;border-radius:10px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--ink);font-weight:600}
+  td.no{color:var(--bad)} td.meh{color:var(--warn)} td.yes{color:var(--ok);font-weight:600}
+  th.us{background:rgba(43,182,166,.10)} .uswin{background:rgba(43,182,166,.10)}
+  code,kbd{background:#0a0d12;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font:12.5px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#cfe8e3}
+  pre{background:#0a0d12;border:1px solid var(--line);border-radius:10px;padding:13px 15px;overflow:auto;margin:8px 0 0}
+  pre code{border:0;padding:0;background:none;color:#cfe8e3;font-size:12.5px;line-height:1.5}
+  .badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:999px;border:1px solid}
+  .badge.honest{color:var(--warn);border-color:var(--warn);background:rgba(240,197,74,.08)}
+  .badge.auto{color:var(--ok);border-color:var(--ok);background:rgba(90,209,154,.08)}
+  .badge.ok{color:var(--ok);border-color:var(--ok);background:rgba(90,209,154,.08)}
+  .quote{border-left:3px solid var(--brain);padding:6px 0 6px 14px;color:var(--ink);font-size:16px;margin:10px 0}
+  .lvl{margin-top:13px} .lvl2,.lvl3{display:none}
+  section.show2 .lvl2{display:block;animation:fade .28s ease}
+  section.show3 .lvl3{display:block;animation:fade .28s ease}
+  .reveal{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;align-items:center}
+  .rbtn{background:var(--panel2);border:1px solid var(--line);color:var(--dim);
+    padding:7px 14px;border-radius:999px;cursor:pointer;font-size:12.5px;font-weight:600;transition:.15s ease;
+    display:inline-flex;align-items:center;gap:7px}
+  .rbtn:hover{color:var(--ink);border-color:#3a4658}
+  .rbtn .chev{transition:transform .2s ease;font-size:11px}
+  .rbtn.det{border-color:rgba(43,182,166,.5)} .rbtn.det:hover{background:rgba(43,182,166,.08)}
+  .rbtn.tech{border-color:rgba(95,176,230,.4)} .rbtn.tech:hover{background:rgba(95,176,230,.08)}
+  section.show2 .rbtn.det .chev{transform:rotate(180deg)}
+  section.show3 .rbtn.tech .chev{transform:rotate(180deg)}
+  .lvlcap{font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin:0 0 4px}
+  .lvlcap.det{color:var(--brain)} .lvlcap.tech{color:var(--eng)}
+  .tech-panel{border-left:2px solid rgba(95,176,230,.4)}
+  .domains{display:grid;grid-template-columns:1fr 56px 1fr;gap:0;align-items:stretch;margin-top:6px}
+  @media(max-width:700px){.domains{grid-template-columns:1fr}}
+  .domain{border-radius:13px;padding:15px 16px;border:1px solid var(--line)}
+  .domain.know{background:rgba(43,182,166,.07);border-color:rgba(43,182,166,.4)}
+  .domain.mech{background:rgba(95,176,230,.06);border-color:rgba(95,176,230,.35)}
+  .domain .dh{font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px;margin-bottom:3px}
+  .domain.know .dh{color:var(--know)} .domain.mech .dh{color:var(--mech)}
+  .domain .ds{color:var(--faint);font-size:11px;margin-bottom:9px;text-transform:uppercase;letter-spacing:.5px}
+  .domain ul{padding-left:18px;margin:0} .domain li{font-size:13px;color:var(--dim)}
+  .bridge{display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:22px}
+  @media(max-width:700px){.bridge{padding:6px 0;transform:rotate(90deg)}}
+  .layer{border:1px solid var(--line);border-radius:10px;padding:11px 15px;margin:6px 0;font-size:13.5px}
+  .layer.top{background:rgba(43,182,166,.10);border-color:var(--brain)}
+  .layer.mid{background:rgba(95,176,230,.08);border-color:var(--eng)}
+  .layer.bot{background:var(--panel2)}
+  .foot{color:var(--faint);font-size:11.5px;margin-top:26px;border-top:1px solid var(--line);padding-top:14px}
+  svg .flow{stroke-dasharray:5 5;animation:dash 1.1s linear infinite}
+  @keyframes dash{to{stroke-dashoffset:-20}}
+  .diagram{margin-top:8px;border:1px solid var(--line);border-radius:12px;background:#0a0d12;padding:12px}
+  .diagram svg{display:block;width:100%;height:auto}
+  .navbtns{display:flex;justify-content:space-between;margin-top:24px;gap:10px}
+  .navbtns button{background:var(--panel);border:1px solid var(--line);color:var(--ink);
+    padding:9px 17px;border-radius:10px;cursor:pointer;font-size:13px}
+  .navbtns button:hover{border-color:var(--brain)} .navbtns button:disabled{opacity:.35;cursor:default}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1><b>Brain</b> — jeden plugin, pamięć każdego zespołu</h1>
+  <p class="one">Wspólna pamięć zespołu i jego agentów AI — jako plugin Claude Code. Wiedza to czysty Markdown w
+     <em>Twoim własnym</em> repo Git; karmisz ją jednym zdaniem: <b>„wrzuć to do braina”</b>.</p>
+  <p class="langbar">🌍 Polski · <a href="index.html">English →</a></p>
+  <p class="hint">Każda strona zaczyna się prosto. Kliknij <b>Szczegóły ⌄</b> po więcej, potem <b>Technicznie ⌄</b>
+     po inżynierię. Używaj pigułek, strzałek albo „Dalej”.</p>
+</header>
+
+<nav class="toc" id="toc"></nav>
+
+<!-- 1 · PROBLEM -->
+<section id="s1">
+  <div class="kicker">Problem</div>
+  <h2>Firma ciągle zapomina — i nasz AI też</h2>
+  <p class="lead">Najmądrzejsze rzeczy, które wiemy, siedzą w głowach, martwych wątkach na Slacku i spotkaniach,
+     których nikt nie spisał. Gdy ktoś zapomni — albo odejdzie — to przepada. Każda sesja Claude'a też startuje od zera.</p>
+
+  <div class="lvl lvl2"><p class="lvlcap det">Szczegóły</p>
+    <div class="panel"><p style="margin:0">Odpowiadamy na te same pytania, odbudowujemy ten sam kontekst i od nowa kłócimy się o ustalone
+    decyzje. Koszt to nie jeden zgubiony dokument — to narastający podatek firmy, która nie pamięta
+    samej siebie, płacony co tydzień przez wszystkich.</p></div></div>
+
+  <div class="lvl lvl3"><p class="lvlcap tech">Technicznie</p>
+    <div class="panel tech-panel"><p style="margin:0">LLM jest bezstanowy między sesjami; okna kontekstu nie trwają. „Pamięć” dostawcy jest per-user i
+    serwerowa. Brakuje <b>wspólnego, trwałego, audytowalnego</b> magazynu, który cała firma i jej agenci
+    czytają i zapisują. Robimy z niego repo Git z Markdownem — diff, review, historia, własność, zero lock-inu.</p></div></div>
+
+  <div class="reveal">
+    <button class="rbtn det" data-act="det">Szczegóły <span class="chev">⌄</span></button>
+    <button class="rbtn tech" data-act="tech">Technicznie <span class="chev">⌄</span></button>
+  </div>
+</section>
+
+<!-- 2 · TWO HALVES -->
+<section id="s2">
+  <div class="kicker">Model myślowy</div>
+  <h2>Dwie połowy: <span style="color:var(--know)">wiedza</span> i
+      <span style="color:var(--mech)">silnik</span></h2>
+  <p class="lead">Jedyna rzecz do zapamiętania. <b style="color:var(--know)">Wiedza, którą posiadasz</b> żyje w
+     <em>Twoim</em> repo. <b style="color:var(--mech)">Silnik, który nią porusza</b> to jeden zainstalowany
+     plugin, który nie trzyma <em>żadnej</em> wiedzy.</p>
+
+  <div class="domains">
+    <div class="domain know">
+      <div class="dh">📚 Wiedza — Twoje repo</div>
+      <div class="ds">co wiesz · jedno na zespół/projekt</div>
+      <ul>
+        <li>czyste notatki <code>.md</code>, wg wymiaru</li>
+        <li>decyzje (ADR-y) + słownik</li>
+        <li>prywatne, czyste dane — <b>bez silnika w środku</b></li>
+        <li>czytelne na zawsze, przez wszystko</li>
+      </ul>
+    </div>
+    <div class="bridge">⇄</div>
+    <div class="domain mech">
+      <div class="dh">⚙️ Silnik — plugin</div>
+      <div class="ds">jak się porusza · instalowany raz</div>
+      <ul>
+        <li><code>kooropatfa/brain</code> — plugin Claude Code</li>
+        <li>brain-sync · brain-init · klasyfikator · reviewer</li>
+        <li>obsługuje <b>dowolnie wiele</b> Brainów na maszynie</li>
+        <li>auto-update; <b>zero wiedzy w środku</b></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="lvl lvl2"><p class="lvlcap det">Szczegóły</p>
+    <div class="panel"><p style="margin:0 0 6px"><b style="color:var(--know)">Po co je dzielić?</b> Wiedza musi przeżyć każde narzędzie, które jej
+    dotyka. Skasuj plugin jutro, a wiedza dalej tam jest — czysty Markdown w Twoim Gicie, czytelny na
+    GitHubie czy w Obsidianie.</p>
+    <p style="margin:0">Silnik to wymienialne rury, których nigdy nie edytujesz. Wiedza to aktywo. Rozdzielenie sprawia, że
+    Brain jest <b>Twój</b>, a nie funkcją czyjegoś produktu.</p></div></div>
+
+  <div class="lvl lvl3"><p class="lvlcap tech">Technicznie</p>
+    <div class="panel tech-panel"><ul style="margin:0">
+      <li><b>Repo silnika:</b> <code>kooropatfa/brain</code> — manifest pluginu, <code>skills/brain/</code>,
+        <code>tools/</code> (sync, init, klasyfikator, reviewer), reużywalne workflowy CI. Bez wiedzy <code>.md</code>.</li>
+      <li><b>Repo wiedzy:</b> generowane przez <code>brain-init</code> — foldery + MOC + config, nic więcej.</li>
+      <li><b>Klon:</b> każdy Brain żyje w <code>~/.brain/&lt;name&gt;</code>; nazwa katalogu <em>jest</em> nazwą Brainu.</li>
+    </ul></div></div>
+
+  <div class="reveal">
+    <button class="rbtn det" data-act="det">Szczegóły <span class="chev">⌄</span></button>
+    <button class="rbtn tech" data-act="tech">Technicznie <span class="chev">⌄</span></button>
+  </div>
+</section>
+
+<!-- 3 · MULTI-BRAIN / MULTI-PROJECT -->
+<section id="s3">
+  <div class="kicker">Jeden plugin, wiele mózgów</div>
+  <h2>Multi-brain, multi-projekt — każdy projekt wybiera swój Brain</h2>
+  <p class="lead">Zainstaluj plugin <b>raz</b>. Prowadź dowolnie wiele Brainów na jednej maszynie — praca, prywatne,
+     per projekt. Każdy projekt deklaruje, których Brainów używa, w pliku <code>.brains.yml</code>;
+     wszystkie pozostałe milczą.</p>
+
+  <div class="diagram" id="diagWrap"></div>
+
+  <div class="lvl lvl2"><p class="lvlcap det">Szczegóły</p>
+    <div class="grid2">
+      <div class="card"><div class="t">🏢 Projekt firmowy → Hooper Brain</div><div class="d">Twoje firmowe repo Hooper wiąże zespołowy Brain (<code>tonsser/hooper-brain</code>). „wrzuć to do braina” trafia tam.</div></div>
+      <div class="card"><div class="t">🏠 Projekty prywatne → Twój Brain</div><div class="d">Projekt poboczny wiąże Twój prywatny Brain (np. <code>kooropatfa/muzg-knowledge</code>). Ten sam gest, inne repo — wiedza firmowa nigdy się nie miesza.</div></div>
+      <div class="card"><div class="t">🔇 Ścisła izolacja</div><div class="d">Związany projekt dotyka tylko swoich Brainów. Contribute odmawia pushu gdzie indziej; reszta milczy.</div></div>
+      <div class="card"><div class="t">🪄 Pytanie raz</div><div class="d">Niezwiązany projekt? Agent wypisuje Twoje Brainy, pyta raz i zapisuje odpowiedź do <code>.brains.yml</code>.</div></div>
+    </div></div>
+
+  <div class="lvl lvl3"><p class="lvlcap tech">Technicznie</p>
+    <div class="panel tech-panel"><ul style="margin:0">
+      <li>Zwiąż projekt: <code>echo 'use: [hooper-brain]' &gt; .brains.yml</code> (nazwy = katalogi klonów w <code>~/.brain/</code>; <code>[]</code> = brak Brainu tutaj).</li>
+      <li>Podłącz maszynę do Brainu: <code>brain-sync connect --repo tonsser/hooper-brain</code> → klonuje do <code>~/.brain/hooper-brain</code>.</li>
+      <li>Zachowanie per-projekt przez <code>&lt;name&gt;.yml</code> + osobisty <code>~/.config/&lt;name&gt;.yml</code>; fallback maszynowy <code>~/.config/brains.yml</code>.</li>
+      <li>Auto-capture na koniec sesji jest bramkowany tym samym wiązaniem — nigdy nie pisze do Brainu, którego projekt nie używa.</li>
+    </ul></div></div>
+
+  <div class="reveal">
+    <button class="rbtn det" data-act="det">Szczegóły <span class="chev">⌄</span></button>
+    <button class="rbtn tech" data-act="tech">Technicznie <span class="chev">⌄</span></button>
+  </div>
+</section>
+
+<!-- 4 · PIPELINE DIAGRAM -->
+<section id="s4">
+  <div class="kicker">Przepływ na jednym obrazku</div>
+  <h2>Od „wrzuć to” do „agent każdego to wie”</h2>
+  <p class="lead">Capture wpływa do Twojego repo wiedzy, jest klasyfikowany i składany, a następnie — domyślnie —
+     <b>auto-merguje się</b>. Potem agent każdego kolegi zaciąga go przy następnej sesji.</p>
+
+  <div class="diagram" id="flowWrap"></div>
+
+  <div class="lvl lvl2"><p class="lvlcap det">Szczegóły</p>
+    <div class="panel"><ul style="margin:0">
+      <li><b style="color:var(--mech)">Wejście:</b> „wrzuć to do braina” (albo skrót Slacka) pisze surowy capture do <code>_inbox/</code>.</li>
+      <li><b style="color:var(--mech)">Sortowanie:</b> pipeline klasyfikuje, destyluje czystą notatkę, linkuje ją i otwiera PR <code>Ingest:</code>.</li>
+      <li><b style="color:var(--ok)">Merge (domyślnie automatyczny):</b> reviewer strukturalny sprawdza PR i squash-merguje te czyste. <b style="color:var(--human)">Merge przez człowieka jest opcjonalny</b> — Brain może go wymagać.</li>
+      <li><b style="color:var(--know)">Wyjście:</b> każdy agent zaciąga najnowsze na starcie sesji — i już to wie.</li>
+    </ul></div></div>
+
+  <div class="lvl lvl3"><p class="lvlcap tech">Technicznie</p>
+    <div class="panel tech-panel"><ul style="margin:0">
+      <li>Capture: <code>_inbox/&lt;source&gt;-&lt;YYYY-MM-DD-HHMM&gt;.md</code> (schema v1).</li>
+      <li>Dwa tryby ingestii: <b>local</b> (domyślny — agent sesji klasyfikuje, bez API/CI) albo <b>action</b> (pipeline GitHub Actions w repo wiedzy).</li>
+      <li>Reviewer auto-merguje PR-y o znanym bezpiecznym kształcie; flaga niepewności lub nieudany check eskaluje do człowieka, nigdy nie merguje w ciemno.</li>
+      <li>Wyłącz auto-merge dla Brainu przez <code>auto_merge: false</code> w jego shimie review-ingest.</li>
+    </ul></div></div>
+
+  <div class="reveal">
+    <button class="rbtn det" data-act="det">Szczegóły <span class="chev">⌄</span></button>
+    <button class="rbtn tech" data-act="tech">Technicznie <span class="chev">⌄</span></button>
+  </div>
+</section>
+
+<!-- 5 · FEED IT -->
+<section id="s5">
+  <div class="kicker">Karmienie</div>
+  <h2>„wrzuć to do braina”</h2>
+  <p class="lead">Powiedz to po ludzku i wskaż <b>cokolwiek</b> — PDF, maila, wątek na Slacku, screena, albo po prostu
+     „to, co przed chwilą rozkminiliśmy”. Nie uczysz się formatu i nie wypełniasz szablonu.</p>
+  <div class="quote">„wrzuć to do braina” &nbsp;→&nbsp; 📎 chaotyczny artefakt &nbsp;⟶&nbsp; 🗂️ schludna, opisana, połączona notatka</div>
+
+  <div class="lvl lvl2"><p class="lvlcap det">Szczegóły</p>
+    <div class="grid2">
+      <div class="card"><div class="t">🗣️ Nie-techniczni</div><div class="d">Jedno kliknięcie <b>„Add to the Brain”</b> na Slacku — najedź, wybierz, gotowe.</div></div>
+      <div class="card"><div class="t">💻 W agencie</div><div class="d">Powiedz Claude'owi „wrzuć to do braina”. Pisze capture i otwiera PR.</div></div>
+      <div class="card"><div class="t">🤝 Proaktywnie</div><div class="d">Gdy pojawi się realna decyzja albo insight, agent proponuje zapis — bez męczenia.</div></div>
+      <div class="card"><div class="t">🔚 Na koniec sesji</div><div class="d">Opcjonalny hook automatycznie destyluje trwałą wiedzę z sesji.</div></div>
+    </div></div>
+
+  <div class="lvl lvl3"><p class="lvlcap tech">Technicznie</p>
+    <div class="panel tech-panel"><p style="margin:0">Ścieżka agenta waliduje capture, potem <code>brain-sync contribute</code> otwiera PR <code>Capture:</code>
+    <b>tylko przeciw związanemu Brainowi projektu</b>. Ścieżka Slacka = skrót wiadomości + modal → relay n8n
+    (z weryfikacją podpisu) → GitHub Contents API. Działa też obserwowany folder („jak Dropbox”) przez <code>inbox-watch</code>.</p></div></div>
+
+  <div class="reveal">
+    <button class="rbtn det" data-act="det">Szczegóły <span class="chev">⌄</span></button>
+    <button class="rbtn tech" data-act="tech">Technicznie <span class="chev">⌄</span></button>
+  </div>
+</section>
+
+<!-- 6 · READ IT -->
+<section id="s6">
+  <div class="kicker">Korzystanie</div>
+  <h2>Czytaj jak człowiek albo pozwól AI czytać za Ciebie</h2>
+  <p class="lead">Wiedza to po prostu pliki. Ludzie je przeglądają; agenci zaglądają do nich automatycznie przed
+     nietrywialną pracą — przestają zgadywać i od nowa rozstrzygać ustalone rzeczy.</p>
+
+  <div class="lvl lvl2"><p class="lvlcap det">Szczegóły</p>
+    <div class="grid2">
+      <div class="panel"><h3>👤 Ludzie</h3><ul>
+        <li>Otwórz jako vault <b>Obsidian</b> — backlinki, graf, wyszukiwarka.</li>
+        <li>Albo po prostu czytaj na GitHubie. Bez terminala.</li>
+        <li>Zmiany reviewowane jak kod: diff, autorstwo, odwracalne.</li></ul></div>
+      <div class="panel"><h3>🤖 Agenci</h3><ul>
+        <li>Sync związanego Brainu na starcie sesji: <code>🧠 Brain zsynchronizowany.</code></li>
+        <li>Zaglądają do właściwego wymiaru przed pracą.</li>
+        <li>Nigdy nie roztrząsają decyzji, która już jest w <code>decisions/</code>.</li></ul></div>
+    </div></div>
+
+  <div class="lvl lvl3"><p class="lvlcap tech">Technicznie</p>
+    <div class="panel tech-panel"><p style="margin:0">Brak wbudowanej wyszukiwarki — agent grepuje klon w <code>~/.brain/&lt;name&gt;</code> wprost, zaczyna
+    od <code>index.md</code> każdego wymiaru (Mapa Treści), respektuje łańcuchy ADR <code>status:</code>
+    i ładuje do kontekstu tylko istotny wycinek.</p></div></div>
+
+  <div class="reveal">
+    <button class="rbtn det" data-act="det">Szczegóły <span class="chev">⌄</span></button>
+    <button class="rbtn tech" data-act="tech">Technicznie <span class="chev">⌄</span></button>
+  </div>
+</section>
+
+<!-- 7 · WHY OURS -->
+<section id="s7">
+  <div class="kicker">Czemu własny</div>
+  <h2>Żadna wbudowana funkcja nie daje wspólnego, posiadanego, wersjonowanego mózgu <em>zespołu</em></h2>
+  <p class="lead">Claude ma funkcje pamięci — ale każda jest lokalna na laptopie, per-osoba, albo serwerową czarną
+     skrzynką. Żadna nie jest pulą, którą zespół posiada i może reviewować.</p>
+  <div class="grid2">
+    <div class="card"><div class="t">CLAUDE.md</div><div class="d">Współdzielone tylko, gdy zacommitujesz. <span class="flaw">per-repo, ręcznie</span></div></div>
+    <div class="card"><div class="t">Pamięć Claude Code / Claude.ai</div><div class="d">Lokalna lub serwerowa, ale per-osoba. <span class="flaw">nigdy pula zespołu</span></div></div>
+  </div>
+
+  <div class="lvl lvl2"><p class="lvlcap det">Szczegóły</p>
+    <div class="panel" style="overflow:auto"><table>
+      <thead><tr><th>Czy zespół może…</th><th>wbudowane</th><th class="us">Brain</th></tr></thead>
+      <tbody>
+        <tr><td>Współdzielić jedną pulę dla wszystkich</td><td class="no">lokalnie / per-osoba</td><td class="yes uswin">tak — jedno repo</td></tr>
+        <tr><td>Posiadać dane (nie serwer dostawcy)</td><td class="meh">częściowo</td><td class="yes uswin">tak — .md w Twoim gicie</td></tr>
+        <tr><td>Diffować / reviewować / audytować zmiany</td><td class="no">raczej nie</td><td class="yes uswin">tak — PR-y i historia</td></tr>
+        <tr><td>Wersjonować i cofać · otwarty format</td><td class="no">nie</td><td class="yes uswin">tak — czysty Markdown</td></tr>
+      </tbody>
+    </table></div></div>
+
+  <div class="lvl lvl3"><p class="lvlcap tech">Technicznie</p>
+    <div class="panel tech-panel"><p style="margin:0">Zweryfikowane do oficjalnych dokumentów (2026): <code>CLAUDE.md</code>/auto-memory Claude Code są
+    lokalne, ale per-maszyna; Projects i pamięć Team/Enterprise są serwerowe, per-user, niewersjonowalne
+    w gicie. Brain wypełnia otwartą niszę — i siedzi <b>na wierzchu</b> Claude Code, nie zamiast.</p></div></div>
+
+  <div class="reveal">
+    <button class="rbtn det" data-act="det">Szczegóły <span class="chev">⌄</span></button>
+    <button class="rbtn tech" data-act="tech">Technicznie <span class="chev">⌄</span></button>
+  </div>
+</section>
+
+<!-- 8 · GET IT -->
+<section id="s8">
+  <div class="kicker">Instalacja</div>
+  <h2>Jedna instalacja na Claude Code — Mac i Windows</h2>
+  <p class="lead">Cienka warstwa na Claude Code. Zainstaluj raz; plugin auto-updatuje się i obsługuje każdy Brain na maszynie.</p>
+  <div class="layer top"><b>📚 Twoje Brainy</b> — wiedza w Twoich repo Git</div>
+  <div class="layer mid"><b>⚙️ plugin brain</b> — sync · klasyfikacja · review · PR-y (jedna instalacja, N mózgów)</div>
+  <div class="layer bot"><b>Claude Code</b> — agent, którego już używasz</div>
+
+  <div class="lvl lvl2"><p class="lvlcap det">Szczegóły</p>
+    <div class="panel"><p style="margin:0 0 6px">Instalacja (raz na maszynę):</p>
+      <pre><code># wymagania + logowanie w przeglądarce (wybierz OS):
+curl -fsSL https://raw.githubusercontent.com/kooropatfa/brain/main/install.sh | bash   # macOS/Linux
+irm https://raw.githubusercontent.com/kooropatfa/brain/main/install.ps1 | iex          # Windows
+
+# potem, w Claude Code:
+/plugin marketplace add kooropatfa/brain
+/plugin install brain@brain</code></pre>
+      <p style="margin:8px 0 0">Stwórz Brain: <code>brain-init</code> scaffolduje repo wiedzy.
+      Podłącz: <code>brain-sync connect --repo owner/name</code>. Zwiąż: <code>use: [name]</code> w
+      <code>.brains.yml</code>.</p></div></div>
+
+  <div class="lvl lvl3"><p class="lvlcap tech">Technicznie</p>
+    <div class="panel tech-panel"><p style="margin:0">Bez kopiowania PAT — <code>gh auth login</code> (przeglądarka) pokrywa push + PR. Repo wiedzy nie mają
+    silnika, więc nie ma w nich czego aktualizować; silnik = plugin, który Claude Code aktualizuje
+    automatycznie. W trybie <code>action</code> shimy w repo wiedzy wołają reużywalne workflowy silnika
+    przypięte do ruchomego tagu <code>@v1</code>.</p></div></div>
+
+  <div class="reveal">
+    <button class="rbtn det" data-act="det">Szczegóły <span class="chev">⌄</span></button>
+    <button class="rbtn tech" data-act="tech">Technicznie <span class="chev">⌄</span></button>
+  </div>
+</section>
+
+<!-- 9 · THE ASK -->
+<section id="s9">
+  <div class="kicker">Prośba</div>
+  <h2>W tym tygodniu: nakarm Brain jedną rzeczą, którą wiesz tylko Ty</h2>
+  <p class="lead">Brain to pusty szkielet, dopóki go nie nakarmisz. Jest tylko tak mądry, jak to, co <b>my</b> w nim umieścimy.</p>
+  <div class="panel"><p style="margin:0">Dodaj <b>jedną</b> rzecz, której nikt nie zapisał — decyzję, insight o kliencie, czemu wybraliśmy X
+    zamiast Y, zasadę designu. Jedno zdanie do agenta. Jeden PR. Auto-merguje się, jeśli jest czysty.
+    Firma robi się odrobinę mniej zapominalska — <b>na zawsze</b>.</p></div>
+
+  <div class="lvl lvl2"><p class="lvlcap det">Szczegóły</p>
+    <div class="panel"><p style="margin:0">Nie przemyśliwuj formatu — nie ma czego się uczyć. Jeśli warto, by kolega wiedział to za trzy
+    miesiące, warto to zapisać. Pipeline składa; reviewer merguje; cały zespół ma dostęp.</p></div></div>
+
+  <div class="lvl lvl3"><p class="lvlcap tech">Technicznie</p>
+    <div class="panel tech-panel"><p style="margin:0"><span class="badge auto">domyślnie</span>&nbsp;
+    Czyste PR-y ingestii <b>auto-mergują się</b> (reviewer strukturalny). <span class="badge honest">opcjonalnie</span>&nbsp;
+    Brain może wymagać człowieka przy każdym merge przez <code>auto_merge: false</code>. Ingest trwa
+    chwilę — nigdy natychmiast.</p></div></div>
+
+  <div class="quote" style="margin-top:16px;font-size:17px">Brain jest dla firmy tym, czym <code>AGENTS.md</code> dla repo — ale żywy, uporządkowany wg wymiarów,
+     współdzielony przez wszystkich i ciągle karmiony. Karmisz go jednym zdaniem: <b>„wrzuć to do braina”</b>.</div>
+
+  <div class="reveal">
+    <button class="rbtn det" data-act="det">Szczegóły <span class="chev">⌄</span></button>
+    <button class="rbtn tech" data-act="tech">Technicznie <span class="chev">⌄</span></button>
+  </div>
+</section>
+
+<div class="navbtns">
+  <button id="prev">← Wstecz</button>
+  <button id="next">Dalej →</button>
+</div>
+
+<p class="foot">Jeden samodzielny plik — otwórz albo wyślij na Slacku; działa offline. Prezentacja o trzymaniu wiedzy
+   w Gicie sama żyje w Gicie, w <code>docs/intro/</code> w repo silnika (<code>kooropatfa/brain</code>).
+   Zweryfikowane do bieżącego builda (multi-brain, auto-merge domyślnie).</p>
+</div>
+
+<script>
+  // ---- diagram 1: multi-brain / multi-project (one engine, N knowledge repos, .brains.yml bindings) ----
+  // generous spacing between system elements; flow arrows from projects -> engine -> the right brain.
+  document.getElementById('diagWrap').innerHTML = [
+    '<svg viewBox="0 0 860 360" role="img" aria-label="One plugin serves several Brains; each project binds the one it uses">',
+    '<defs>',
+    '<marker id="ab" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5fb0e6"/></marker>',
+    '<marker id="ag" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#2bb6a6"/></marker>',
+    '</defs>',
+    // projects column (left), well spaced
+    '<text x="120" y="34" text-anchor="middle" fill="#6b7888" font-size="11">TWOJE PROJEKTY</text>',
+    '<rect x="30" y="56" width="180" height="58" rx="11" fill="rgba(95,176,230,.07)" stroke="#5fb0e6"/>',
+    '<text x="120" y="80" text-anchor="middle" fill="#5fb0e6" font-size="13" font-weight="600">🏢 Hooper (praca)</text>',
+    '<text x="120" y="100" text-anchor="middle" fill="#6b7888" font-size="10">.brains.yml → hooper-brain</text>',
+    '<rect x="30" y="150" width="180" height="58" rx="11" fill="rgba(95,176,230,.07)" stroke="#5fb0e6"/>',
+    '<text x="120" y="174" text-anchor="middle" fill="#5fb0e6" font-size="13" font-weight="600">🏠 projekt poboczny</text>',
+    '<text x="120" y="194" text-anchor="middle" fill="#6b7888" font-size="10">.brains.yml → muzg-knowledge</text>',
+    '<rect x="30" y="244" width="180" height="58" rx="11" fill="rgba(95,176,230,.07)" stroke="#5fb0e6"/>',
+    '<text x="120" y="268" text-anchor="middle" fill="#5fb0e6" font-size="13" font-weight="600">🧪 inny projekt</text>',
+    '<text x="120" y="288" text-anchor="middle" fill="#6b7888" font-size="10">.brains.yml → venture-brain</text>',
+    // engine (center), clearly separated
+    '<text x="430" y="34" text-anchor="middle" fill="#6b7888" font-size="11">JEDEN PLUGIN (instalowany raz)</text>',
+    '<rect x="330" y="120" width="200" height="120" rx="14" fill="rgba(95,176,230,.10)" stroke="#5fb0e6" stroke-width="1.5"/>',
+    '<text x="430" y="150" text-anchor="middle" fill="#5fb0e6" font-size="15" font-weight="700">⚙️ silnik brain</text>',
+    '<text x="430" y="171" text-anchor="middle" fill="#9aa7b8" font-size="11">kooropatfa/brain</text>',
+    '<text x="430" y="190" text-anchor="middle" fill="#9aa7b8" font-size="10.5">sync · init · classify · review</text>',
+    '<text x="430" y="208" text-anchor="middle" fill="#9aa7b8" font-size="10.5">czyta .brains.yml każdego projektu</text>',
+    '<text x="430" y="228" text-anchor="middle" fill="#6b7888" font-size="10">NIE trzyma wiedzy</text>',
+    // knowledge repos (right), well spaced
+    '<text x="740" y="34" text-anchor="middle" fill="#6b7888" font-size="11">TWOJE BRAINY (wiedza)</text>',
+    '<rect x="650" y="56" width="180" height="58" rx="11" fill="rgba(43,182,166,.10)" stroke="#2bb6a6"/>',
+    '<text x="740" y="80" text-anchor="middle" fill="#2bb6a6" font-size="13" font-weight="700">📚 hooper-brain</text>',
+    '<text x="740" y="100" text-anchor="middle" fill="#6b7888" font-size="10">tonsser · zespół</text>',
+    '<rect x="650" y="150" width="180" height="58" rx="11" fill="rgba(43,182,166,.10)" stroke="#2bb6a6"/>',
+    '<text x="740" y="174" text-anchor="middle" fill="#2bb6a6" font-size="13" font-weight="700">📚 muzg-knowledge</text>',
+    '<text x="740" y="194" text-anchor="middle" fill="#6b7888" font-size="10">kooropatfa · prywatne</text>',
+    '<rect x="650" y="244" width="180" height="58" rx="11" fill="rgba(43,182,166,.10)" stroke="#2bb6a6"/>',
+    '<text x="740" y="268" text-anchor="middle" fill="#2bb6a6" font-size="13" font-weight="700">📚 venture-brain</text>',
+    '<text x="740" y="288" text-anchor="middle" fill="#6b7888" font-size="10">Twój projekt</text>',
+    // arrows: projects -> engine (blue), with breathing room
+    '<path class="flow" d="M212,85 C270,90 280,140 328,155" fill="none" stroke="#5fb0e6" stroke-width="2" marker-end="url(#ab)"/>',
+    '<path class="flow" d="M212,179 L328,180" fill="none" stroke="#5fb0e6" stroke-width="2" marker-end="url(#ab)"/>',
+    '<path class="flow" d="M212,273 C270,270 280,220 328,205" fill="none" stroke="#5fb0e6" stroke-width="2" marker-end="url(#ab)"/>',
+    // arrows: engine -> the matching brain (green), spaced apart
+    '<path class="flow" d="M532,150 C600,120 600,95 648,85" fill="none" stroke="#2bb6a6" stroke-width="2" marker-end="url(#ag)"/>',
+    '<path class="flow" d="M532,180 L648,180" fill="none" stroke="#2bb6a6" stroke-width="2" marker-end="url(#ag)"/>',
+    '<path class="flow" d="M532,210 C600,240 600,265 648,273" fill="none" stroke="#2bb6a6" stroke-width="2" marker-end="url(#ag)"/>',
+    '<text x="270" y="330" fill="#6b7888" font-size="10.5">projekt wiąże swój Brain → jeden plugin syncuje i karmi dokładnie to repo</text>',
+    '</svg>'
+  ].join('');
+
+  // ---- diagram 2: the ingestion flow (auto-merge by default; human merge optional) ----
+  document.getElementById('flowWrap').innerHTML = [
+    '<svg viewBox="0 0 860 250" role="img" aria-label="Capture flows into the knowledge repo, classified, filed, auto-merged by default, then read by every agent">',
+    '<defs>',
+    '<marker id="fb" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5fb0e6"/></marker>',
+    '<marker id="fg" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#2bb6a6"/></marker>',
+    '</defs>',
+    // row of well-spaced steps
+    '<rect x="24" y="70" width="150" height="66" rx="11" fill="rgba(95,176,230,.08)" stroke="#5fb0e6"/>',
+    '<text x="99" y="96" text-anchor="middle" fill="#5fb0e6" font-size="12.5" font-weight="600">💬 „wrzuć to”</text>',
+    '<text x="99" y="115" text-anchor="middle" fill="#6b7888" font-size="10">agent / Slack pisze</text>',
+    '<text x="99" y="129" text-anchor="middle" fill="#6b7888" font-size="10">surowy capture</text>',
+    '<rect x="218" y="70" width="150" height="66" rx="11" fill="rgba(95,176,230,.06)" stroke="#5fb0e6" stroke-dasharray="4 3"/>',
+    '<text x="293" y="96" text-anchor="middle" fill="#5fb0e6" font-size="12.5" font-weight="600">_inbox/</text>',
+    '<text x="293" y="115" text-anchor="middle" fill="#6b7888" font-size="10">w Twoim repo</text>',
+    '<text x="293" y="129" text-anchor="middle" fill="#6b7888" font-size="10">wiedzy</text>',
+    '<rect x="412" y="70" width="150" height="66" rx="11" fill="rgba(95,176,230,.08)" stroke="#5fb0e6"/>',
+    '<text x="487" y="92" text-anchor="middle" fill="#5fb0e6" font-size="12.5" font-weight="600">⚙️ pipeline</text>',
+    '<text x="487" y="110" text-anchor="middle" fill="#6b7888" font-size="10">klasyfikuj · destyluj</text>',
+    '<text x="487" y="124" text-anchor="middle" fill="#6b7888" font-size="10">złóż · otwórz PR</text>',
+    '<rect x="606" y="70" width="150" height="66" rx="11" fill="rgba(90,209,154,.08)" stroke="#5ad19a"/>',
+    '<text x="681" y="92" text-anchor="middle" fill="#5ad19a" font-size="12.5" font-weight="700">✅ auto-merge</text>',
+    '<text x="681" y="110" text-anchor="middle" fill="#6b7888" font-size="10">czysty PR → wchodzi (domyślnie)</text>',
+    '<text x="681" y="124" text-anchor="middle" fill="#6b7888" font-size="10">człowiek: opcjonalnie</text>',
+    // knowledge core (right) + agents read (below)
+    '<rect x="606" y="168" width="150" height="56" rx="11" fill="rgba(43,182,166,.12)" stroke="#2bb6a6"/>',
+    '<text x="681" y="190" text-anchor="middle" fill="#2bb6a6" font-size="12.5" font-weight="700">📚 wiedza</text>',
+    '<text x="681" y="208" text-anchor="middle" fill="#6b7888" font-size="10">Twoje repo, zaktualizowane</text>',
+    '<rect x="24" y="168" width="340" height="56" rx="11" fill="rgba(43,182,166,.07)" stroke="#2bb6a6"/>',
+    '<text x="194" y="190" text-anchor="middle" fill="#2bb6a6" font-size="12.5" font-weight="600">🤖 każdy agent zaciąga Brain na starcie sesji</text>',
+    '<text x="194" y="208" text-anchor="middle" fill="#6b7888" font-size="10">…i już to wie</text>',
+    // flow arrows (blue in), spaced
+    '<path class="flow" d="M174,103 L216,103" fill="none" stroke="#5fb0e6" stroke-width="2" marker-end="url(#fb)"/>',
+    '<path class="flow" d="M368,103 L410,103" fill="none" stroke="#5fb0e6" stroke-width="2" marker-end="url(#fb)"/>',
+    '<path class="flow" d="M562,103 L604,103" fill="none" stroke="#5fb0e6" stroke-width="2" marker-end="url(#fb)"/>',
+    // auto-merge -> knowledge (green down)
+    '<path class="flow" d="M681,136 L681,166" fill="none" stroke="#2bb6a6" stroke-width="2" marker-end="url(#fg)"/>',
+    // knowledge -> agents read (green left)
+    '<path class="flow" d="M604,196 L366,196" fill="none" stroke="#2bb6a6" stroke-width="2" marker-end="url(#fg)"/>',
+    '</svg>'
+  ].join('');
+
+  var ids = ['s1','s2','s3','s4','s5','s6','s7','s8','s9'];
+  var labels = ['Problem','Dwie połowy','Multi-brain','Przepływ','Karm','Czytaj','Czemu nasz','Zainstaluj','Prośba'];
+  var cur = 0;
+  var toc = document.getElementById('toc');
+  ids.forEach(function(id,i){
+    var b=document.createElement('button'); b.textContent=(i+1)+'. '+labels[i];
+    b.onclick=function(){show(i)}; b.id='t'+i; toc.appendChild(b);
+  });
+  function show(i){
+    cur=Math.max(0,Math.min(ids.length-1,i));
+    ids.forEach(function(id,j){
+      document.getElementById(id).classList.toggle('on', j===cur);
+      document.getElementById('t'+j).classList.toggle('on', j===cur);
+    });
+    document.getElementById('prev').disabled = cur===0;
+    document.getElementById('next').disabled = cur===ids.length-1;
+    if(location.hash!=='#'+ids[cur]) history.replaceState(null,'','#'+ids[cur]);
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  document.querySelectorAll('.reveal .rbtn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var sec = btn.closest('section');
+      if(btn.dataset.act==='det'){ sec.classList.toggle('show2');
+        if(!sec.classList.contains('show2')) sec.classList.remove('show3'); }
+      else { var on = !sec.classList.contains('show3');
+        sec.classList.toggle('show3', on); if(on) sec.classList.add('show2'); }
+    });
+  });
+  document.getElementById('prev').onclick=function(){show(cur-1)};
+  document.getElementById('next').onclick=function(){show(cur+1)};
+  document.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'||e.key==='PageDown'){show(cur+1)}
+    if(e.key==='ArrowLeft'||e.key==='PageUp'){show(cur-1)}
+  });
+  var start = ids.indexOf((location.hash||'').slice(1));
+  show(start>=0?start:0);
+</script>
+</body>
+</html>
