@@ -1,0 +1,70 @@
+name: Notify Slack — knowledge awaiting approval (reusable)
+
+# v1 compatibility contract: within v1, never add a required input/secret and never rename this file — stamped shims cannot be centrally fixed.
+#
+# Pings the review channel whenever new knowledge is waiting on a human:
+#   • an `Ingest:` PR is open                  → ":brain: New knowledge awaits approval"
+#   • an `Ingest:` PR carries `needs-human`    → ":warning: Knowledge needs a human decision" + the
+#                                                 agent's questions quoted from the PR body
+#
+# Trigger lives in the knowledge repo's thin shim (template: brain-init's
+# templates/workflows/notify-slack.yml) and mirrors the review shim: PRs and
+# labels created with GITHUB_TOKEN never fire pull_request workflows (GitHub loop-prevention), so
+# the bot-driven cases ride workflow_run off the two pipeline shims, and the human-driven cases (a
+# person opens an Ingest PR or applies needs-human by hand) ride pull_request. The notifier itself
+# is a stateless idempotent scan with marker-label dedup (.engine/tools/notifier/notify-slack.mjs),
+# so overlapping triggers are harmless. The shim threads its event context through the inputs
+# below (workflow_call has no event of its own) and declares the global `notify-slack` concurrency
+# group (scans are global; never two at once — double-post race).
+#
+# Setup (one-time): create the review channel in Slack, add an Incoming Webhook to it (the same
+# Slack app used by integrations/slack works), save the URL as the SLACK_WEBHOOK_URL secret in the
+# knowledge repo (the shim's `secrets: inherit` passes it through). No secret = the workflow exits
+# silently; nothing breaks.
+
+on:
+  workflow_call:
+    inputs:
+      event_name:
+        description: "The shim's triggering event name (github.event_name: workflow_run | pull_request)"
+        required: true
+        type: string
+      pr_title:
+        description: "PR title for pull_request events (github.event.pull_request.title; empty otherwise)"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      SLACK_WEBHOOK_URL:
+        required: false
+
+permissions:
+  contents: read         # checkout — an explicit permissions block zeroes everything unlisted
+  pull-requests: write   # add the slack-notified marker labels
+  issues: write          # labels on PRs go through the issues endpoint
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    # For pull_request events only bother when it's an ingestion PR; workflow_run always scans.
+    if: inputs.event_name == 'workflow_run' || startsWith(inputs.pr_title, 'Ingest:')
+    steps:
+      # no caller checkout: the notifier is pure-API; only the engine checkout is needed
+
+      # The notifier comes from the engine repo, pinned by tag.
+      - name: Checkout engine
+        uses: actions/checkout@v4
+        with:
+          repository: kooropatfa/brain
+          ref: v1
+          path: .engine
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Scan open Ingest PRs and notify
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .engine/tools/notifier/notify-slack.mjs

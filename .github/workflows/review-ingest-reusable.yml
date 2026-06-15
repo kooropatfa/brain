@@ -1,0 +1,168 @@
+name: Review + auto-merge ingestion PRs (reusable)
+
+# v1 compatibility contract: within v1, never add a required input/secret and never rename this file — stamped shims cannot be centrally fixed.
+#
+# The second half of the feeding loop (ADR-0002). The ingest pipeline opens a PR for each capture
+# but never merges (the Action is the notification). This workflow runs a deterministic, AI-free
+# structural reviewer (.engine/tools/reviewer/validate-ingest.mjs) over each ingestion PR and:
+#   - auto-merges (approve + squash) the ones that match the known-safe diff shape with no
+#     confidence flags — this is the DEFAULT; callers opt OUT (comment-only, human merges) by
+#     passing `auto_merge: false` from their shim, OR
+#   - escalates anything questionable to a human (needs-human label + a review comment naming the
+#     exact failing check). It NEVER touches human/feature PRs (those keep promote: ask-each-time).
+#
+# Trigger lives in the knowledge repo's thin shim (template: brain-init's
+# templates/workflows/review-ingest.yml): workflow_run off the ingest shim, NOT pull_request:
+#   - PRs created by github-actions[bot] with the default GITHUB_TOKEN do not fire pull_request/push
+#     workflows (GitHub loop-prevention), so a pull_request trigger would never run on these PRs.
+#   - workflow_run is not subject to that suppression, needs no PAT (keeps the CI write-credential
+#     blast radius small — see ADR-0001), and always runs the shim from the DEFAULT BRANCH — and the
+#     reviewer logic itself comes from the engine repo pinned at a tag, so a bot PR in the knowledge
+#     repo can't ship a tampered reviewer that approves itself.
+#   - the shim also declares the per-branch concurrency group
+#     (review-ingest-${{ github.event.workflow_run.head_branch }}) — the workflow_run event is only
+#     available in the caller, so whatever this workflow needs from it arrives via inputs below.
+
+on:
+  workflow_call:
+    inputs:
+      conclusion:
+        description: "Conclusion of the ingest run that triggered the caller (the shim passes github.event.workflow_run.conclusion)"
+        required: true
+        type: string
+      auto_merge:
+        description: "true (default) = approve + squash-merge clean ingestion PRs automatically; false = structural review only, a human merges"
+        required: false
+        type: boolean
+        default: true
+
+# Belt-and-suspenders: this workflow only ever merges; default to read and grant write explicitly.
+permissions:
+  contents: write        # squash-merge
+  pull-requests: write   # approve, comment, label, merge
+  issues: write          # gh label create on escalate path goes through the issues endpoint
+
+jobs:
+  review:
+    # only review if the ingestion run that triggered the caller actually succeeded
+    if: ${{ inputs.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # DRY-RUN GATE: '0' = approve + squash-merge clean PRs — the DEFAULT (auto_merge defaults to
+      # true). Callers opt OUT by passing `auto_merge: false` from their shim, which flips this to
+      # '1' (comment "would auto-merge" instead of merging; a human merges). The reviewer stays
+      # default-escalate either way — anything failing a structural check or carrying a confidence
+      # flag still goes to a human, never merges. (Job-level env: the `inputs` context is reliably
+      # in scope here.)
+      REVIEW_DRY_RUN: ${{ inputs.auto_merge && '0' || '1' }}
+    steps:
+      - name: Resolve + gate the ingestion PR
+        id: gate
+        run: |
+          set -euo pipefail
+          # NOTE: we deliberately do NOT use the triggering run's head_branch — for a push-triggered
+          # ingest run that is "main" (the branch ingest RAN on), not the ingest/* branch it CREATED.
+          # There's no field on the workflow_run event that points at the bot's PR (which is also why
+          # the shim only threads `conclusion` through). So instead: list the open ingest/* PRs
+          # authored by the ingestion bot and review the newest one. This is robust to how ingest was
+          # triggered (push or workflow_dispatch) and still ignores all human/feature PRs.
+          PRJSON="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open \
+            --json number,author,headRefName,isDraft,baseRefName,createdAt \
+            --jq '[.[] | select(.headRefName | startswith("ingest/")) | select(.author.login == "github-actions[bot]" or .author.login == "app/github-actions")] | sort_by(.createdAt) | reverse')"
+          COUNT="$(echo "$PRJSON" | jq 'length')"
+          echo "open ingestion PRs (ingest/* + bot author): $COUNT"
+          if [[ "$COUNT" == "0" ]]; then
+            echo "No open ingestion PRs to review. Skipping."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # Review the newest ingestion PR (the one the just-finished ingest run most likely opened).
+          {
+            echo "proceed=true"
+            echo "pr=$(echo "$PRJSON" | jq -r '.[0].number')"
+            echo "branch=$(echo "$PRJSON" | jq -r '.[0].headRefName')"
+            echo "base=$(echo "$PRJSON" | jq -r '.[0].baseRefName')"
+            echo "draft=$(echo "$PRJSON" | jq -r '.[0].isDraft')"
+          } >> "$GITHUB_OUTPUT"
+          echo "Reviewing PR #$(echo "$PRJSON" | jq -r '.[0].number') ($(echo "$PRJSON" | jq -r '.[0].headRefName'))"
+
+      # Default repository under workflow_call = the CALLER's knowledge repo (where the PR lives).
+      - name: Checkout PR head
+        if: steps.gate.outputs.proceed == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.gate.outputs.branch }}
+          fetch-depth: 0
+
+      # The reviewer comes from the engine repo, pinned by tag — never from the PR under review.
+      - name: Checkout engine
+        if: steps.gate.outputs.proceed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: kooropatfa/brain
+          ref: v1
+          path: .engine
+
+      - name: Set up Node
+        if: steps.gate.outputs.proceed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate (structural reviewer)
+        if: steps.gate.outputs.proceed == 'true'
+        id: validate
+        run: |
+          set -euo pipefail
+          # base = merge-base of the PR's base branch and the PR head (the diff range the reviewer checks).
+          git fetch origin "${{ steps.gate.outputs.base }}" --depth=0 || git fetch origin "${{ steps.gate.outputs.base }}"
+          BASE="$(git merge-base "origin/${{ steps.gate.outputs.base }}" HEAD)"
+          # Capture the PR body for the confidence-flag check (C9). Read from the PR, not the tree.
+          gh pr view "${{ steps.gate.outputs.pr }}" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' > "$RUNNER_TEMP/pr-body.txt"
+          DRAFT_FLAG=""
+          if [[ "${{ steps.gate.outputs.draft }}" == "true" ]]; then DRAFT_FLAG="--draft"; fi
+          node .engine/tools/reviewer/validate-ingest.mjs \
+            --repo . --base "$BASE" --head HEAD \
+            --pr-body-file "$RUNNER_TEMP/pr-body.txt" $DRAFT_FLAG > "$RUNNER_TEMP/verdict.json"
+          cat "$RUNNER_TEMP/verdict.json"
+          echo "decision=$(jq -r '.decision' "$RUNNER_TEMP/verdict.json")" >> "$GITHUB_OUTPUT"
+
+      - name: Auto-merge (clean PR)
+        if: steps.gate.outputs.proceed == 'true' && steps.validate.outputs.decision == 'merge'
+        run: |
+          set -euo pipefail
+          PR="${{ steps.gate.outputs.pr }}"
+          SUMMARY="$(jq -r '.summary' "$RUNNER_TEMP/verdict.json")"
+          if [[ "$REVIEW_DRY_RUN" == "1" ]]; then
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body \
+              "🟢 **[DRY-RUN] Structural review passed** — would auto-merge (squash). $SUMMARY"$'\n\n'"_This repo opted out of auto-merge (\`auto_merge: false\` in its review-ingest shim); merge manually, or remove that line to restore the default automatic squash-merge._"
+            echo "DRY-RUN: would have approved + squash-merged PR #$PR"
+            exit 0
+          fi
+          gh pr review "$PR" --repo "$GITHUB_REPOSITORY" --approve --body \
+            "🟢 Structural review passed. $SUMMARY Auto-merging per ADR-0002 (ingestion-PR auto-merge)."
+          gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash --delete-branch
+
+      - name: Escalate (flagged PR)
+        if: steps.gate.outputs.proceed == 'true' && steps.validate.outputs.decision == 'escalate'
+        run: |
+          set -euo pipefail
+          PR="${{ steps.gate.outputs.pr }}"
+          # Build a human-readable list of exactly which checks failed and why.
+          REASONS="$(jq -r '.checks[] | select(.passed==false) | "- **" + .id + "**: " + .detail' "$RUNNER_TEMP/verdict.json")"
+          SUMMARY="$(jq -r '.summary' "$RUNNER_TEMP/verdict.json")"
+          # Ensure labels exist (idempotent), then label the PR.
+          gh label create needs-human --repo "$GITHUB_REPOSITORY" --color B60205 --description "Ingestion PR needs human review (structural check failed or low-confidence flag)" 2>/dev/null || true
+          gh label create ingestion   --repo "$GITHUB_REPOSITORY" --color 1D76DB --description "Opened by the ingestion pipeline" 2>/dev/null || true
+          gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --add-label needs-human --add-label ingestion
+          gh pr review "$PR" --repo "$GITHUB_REPOSITORY" --request-changes --body \
+            "## 🟠 Automated structural review: NEEDS HUMAN
+
+          This ingestion PR was **not** auto-merged. $SUMMARY
+
+          Failing checks:
+          $REASONS
+
+          A human steward should review. Re-run this workflow after addressing, or merge manually if the change is intentional."
+          echo "Escalated PR #$PR to a human."

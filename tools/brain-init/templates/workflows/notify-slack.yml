@@ -1,0 +1,26 @@
+# Thin shim — all logic lives in the Brain engine, pinned to the MOVING major tag v1: engine upgrades arrive automatically. Pin a commit SHA instead of v1 to freeze; a breaking engine release ships as @v2.
+# Secrets (flow via secrets: inherit): SLACK_WEBHOOK_URL (optional — absent = silent no-op). Full contract: the reusable's header.
+name: Notify Slack — knowledge awaiting approval
+on:
+  workflow_run:
+    workflows:
+      - "Ingest _inbox captures"              # must match ingest.yml's `name:` exactly
+      - "Review + auto-merge ingestion PRs"   # must match review-ingest.yml's `name:` exactly
+    types: [completed]
+  pull_request:
+    types: [opened, labeled, ready_for_review]
+concurrency:
+  group: notify-slack    # scans are global; never run two at once (double-post race)
+  cancel-in-progress: false
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+jobs:
+  notify:
+    uses: kooropatfa/brain/.github/workflows/notify-slack-reusable.yml@v1
+    with:
+      # The triggering event exists only here in the shim — thread what the engine needs.
+      event_name: ${{ github.event_name }}
+      pr_title: ${{ github.event.pull_request.title || '' }}
+    secrets: inherit

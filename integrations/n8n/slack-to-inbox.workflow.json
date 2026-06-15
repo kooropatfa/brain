@@ -1,0 +1,112 @@
+{
+  "name": "slack-to-inbox",
+  "meta": {
+    "description": "Receives a Slack interaction (message shortcut 'Add to the Brain' modal submit, or a :brain: reaction), verifies the Slack request signature, normalizes it into the m2 _inbox schema (source: slack), and writes _inbox/slack-<ts>.md to the Brain repo via the GitHub Contents API. That push fires m3's ingest.yml. Non-technical feeding channel of Brain. Reuses m5's meet-to-inbox skeleton + GitHub credential. Host: Railway. See integrations/slack/README.md. Keep the Code node in lock-step with integrations/n8n/slack-normalize.js (its test guards the contract)."
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "slack-to-inbox",
+        "responseMode": "responseNode",
+        "options": { "rawBody": true }
+      },
+      "id": "webhook-in",
+      "name": "Webhook (Slack interaction)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "slack-to-inbox"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// === slack-to-inbox: verify Slack signature + normalize into m2 schema-v1 capture ===\n// Body of integrations/n8n/slack-normalize.js, inlined, plus Slack request-signature verification.\n// Keep in lock-step with slack-normalize.js (its test guards it). See integrations/slack/README.md.\n//\n// Env (n8n Variables / container env):\n//   SLACK_SIGNING_SECRET  — verify X-Slack-Signature\n//   SLACK_BOT_TOKEN       — (optional here) used by lookup nodes for users.info/conversations.info\n//   BRAIN_REPO (default your-org/brain), BRAIN_BRANCH (default main)\nconst crypto = require('crypto');\nconst item = $input.first().json;\nconst headers = item.headers || {};\nconst rawBody = (item.body && typeof item.body === 'string') ? item.body : ($json.rawBody || '');\n\n// --- 1. verify Slack signature (HMAC v0) + reject replays (>5 min) ---\nconst secret = $env.SLACK_SIGNING_SECRET;\nif (!secret) throw new Error('slack-to-inbox: SLACK_SIGNING_SECRET is not set');\nconst ts = headers['x-slack-request-timestamp'];\nconst sig = headers['x-slack-signature'];\nif (!ts || !sig) throw new Error('slack-to-inbox: missing Slack signature headers');\nif (Math.abs(Date.now()/1000 - Number(ts)) > 300) throw new Error('slack-to-inbox: stale request (replay?)');\nconst base = `v0:${ts}:${rawBody}`;\nconst mine = 'v0=' + crypto.createHmac('sha256', secret).update(base).digest('hex');\nconst ok = (mine.length === sig.length) && crypto.timingSafeEqual(Buffer.from(mine), Buffer.from(sig));\nif (!ok) throw new Error('slack-to-inbox: bad Slack signature');\n\n// --- 2. parse the Slack payload (view_submission shortcut, or reaction_added) ---\n// Slack interactive payloads arrive urlencoded as payload=<json>; events arrive as JSON.\nlet payload;\nif (rawBody.startsWith('payload=')) {\n  payload = JSON.parse(decodeURIComponent(rawBody.slice('payload='.length)));\n} else {\n  payload = (typeof item.body === 'object') ? item.body : JSON.parse(rawBody);\n}\n// Slack URL verification handshake\nif (payload.type === 'url_verification') { return [{ json: { _challenge: payload.challenge } }]; }\n\n// Extract the common fields from either a modal submit or a reaction event.\nlet text = '', tsMsg = '', title = '', hint = '', channel = '', author = '';\nif (payload.type === 'view_submission') {\n  const md = payload.view.private_metadata ? JSON.parse(payload.view.private_metadata) : {};\n  text = md.text || ''; tsMsg = md.ts || ''; channel = md.channel_name || ''; author = md.author || '';\n  const vals = payload.view.state && payload.view.state.values ? payload.view.state.values : {};\n  for (const blk of Object.values(vals)) for (const f of Object.values(blk)) {\n    if (f.type === 'plain_text_input') title = (f.value || '').trim();\n    if (f.type === 'static_select' && f.selected_option) hint = f.selected_option.value || '';\n  }\n} else if (payload.event && payload.event.type === 'reaction_added') {\n  // The lookup nodes (not shown) should enrich text/author/channel from the reacted item via the bot token.\n  text = payload.event._text || ''; tsMsg = (payload.event.item && payload.event.item.ts) || '';\n  channel = payload.event._channel_name || ''; author = payload.event._author || '';\n} else {\n  throw new Error('slack-to-inbox: unsupported interaction type');\n}\n\n// --- 3. normalize (mirror of slack-normalize.js buildCapture) ---\nconst p2 = (n) => String(n).padStart(2, '0');\nconst canonicalISO = (iso) => { const d = new Date(iso); if (Number.isNaN(d.getTime())) throw new Error(`invalid 'captured': ${iso}`); return d.toISOString().replace(/\\.\\d{3}Z$/, 'Z'); };\nconst isoFromSlackTs = (t) => { const s = Number(String(t).split('.')[0]); if (!Number.isFinite(s) || s <= 0) throw new Error(`invalid Slack ts: ${t}`); return new Date(s*1000).toISOString().replace(/\\.\\d{3}Z$/, 'Z'); };\nconst stampFromISO = (iso) => { const d = new Date(iso); if (Number.isNaN(d.getTime())) throw new Error(`invalid 'captured': ${iso}`); return `${d.getUTCFullYear()}-${p2(d.getUTCMonth()+1)}-${p2(d.getUTCDate())}-${p2(d.getUTCHours())}${p2(d.getUTCMinutes())}`; };\nconst yamlStr = (s) => `\"${String(s).replace(/\\\\/g,'\\\\\\\\').replace(/\"/g,'\\\\\"')}\"`;\nconst yamlList = (items) => `[${items.map((it)=>{const s=String(it).trim(); return /^[A-Za-z0-9_\\-.]+$/.test(s)?s:yamlStr(s);}).join(', ')}]`;\nconst DIMS = ['technical','business','product','design','user'];\n\nif (typeof text !== 'string' || text.trim() === '') throw new Error(\"'text' is required\");\nconst capturedISO = canonicalISO(isoFromSlackTs(tsMsg));\nconst stamp = stampFromISO(capturedISO);\ntitle = (title || '').trim();\nif (!title) { const fl = text.trim().split('\\n')[0].replace(/\\s+/g,' ').slice(0,80); title = fl ? `Slack note — ${fl}` : `Slack note (${stamp})`; }\nconst participants = author ? [String(author).trim()].filter(Boolean) : [];\nif (hint.toLowerCase() === 'let it decide' || hint.toLowerCase() === 'auto') hint = '';\n\nconst fm = ['---','source:    slack',`captured:  ${capturedISO}`,`title:     ${yamlStr(title)}`];\nif (participants.length) fm.push(`participants: ${yamlList(participants)}`);\nif (channel) fm.push(`channel:   ${yamlStr(channel.startsWith('#')?channel:('#'+channel))}`);\nif (hint) fm.push(`hint:      ${DIMS.includes(hint)?hint:yamlStr(hint)}`);\nfm.push('---');\nconst content = `${fm.join('\\n')}\\n\\n${text.replace(/\\s+$/,'')}\\n`;\nconst filename = `slack-${stamp}.md`;\n\nreturn [{ json: {\n  path: `_inbox/${filename}`,\n  filename,\n  capturedISO,\n  contentB64: Buffer.from(content, 'utf8').toString('base64'),\n  commitMessage: `feat(inbox): slack capture ${filename}`,\n  brainRepo: $env.BRAIN_REPO || 'your-org/brain',\n  branch: $env.BRAIN_BRANCH || 'main',\n  responseUrl: (payload.response_url || (payload.view && JSON.parse(payload.view.private_metadata||'{}').response_url) || '')\n} }];"
+      },
+      "id": "normalize",
+      "name": "Verify + Normalize → m2 capture",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.github.com/repos/{{ $json.brainRepo }}/contents/{{ $json.path }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Accept", "value": "application/vnd.github+json" },
+            { "name": "X-GitHub-Api-Version", "value": "2022-11-28" },
+            { "name": "User-Agent", "value": "brain-slack-to-inbox" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"message\": {{ JSON.stringify($json.commitMessage) }},\n  \"content\": {{ JSON.stringify($json.contentB64) }},\n  \"branch\": {{ JSON.stringify($json.branch) }}\n}",
+        "options": {
+          "response": { "response": { "fullResponse": false } }
+        }
+      },
+      "id": "github-put",
+      "name": "GitHub Contents API (PUT _inbox/slack-*.md)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 240],
+      "credentials": {
+        "httpHeaderAuth": { "id": "github-token", "name": "GitHub token (Authorization: Bearer)" }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"response_type\": \"ephemeral\",\n  \"text\": \"Saved \\u2014 it'll be reviewed and added to the Brain shortly.\"\n}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "respond-ok",
+      "name": "Respond (saved, ephemeral)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [960, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"response_type\": \"ephemeral\",\n  \"text\": \"Couldn't save that \\u2014 try again, or ping #brain-help. (no capture was written)\"\n}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "respond-err",
+      "name": "Respond (failed, ephemeral)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [720, 460]
+    }
+  ],
+  "connections": {
+    "Webhook (Slack interaction)": {
+      "main": [[{ "node": "Verify + Normalize → m2 capture", "type": "main", "index": 0 }]]
+    },
+    "Verify + Normalize → m2 capture": {
+      "main": [
+        [{ "node": "GitHub Contents API (PUT _inbox/slack-*.md)", "type": "main", "index": 0 }],
+        [{ "node": "Respond (failed, ephemeral)", "type": "main", "index": 0 }]
+      ]
+    },
+    "GitHub Contents API (PUT _inbox/slack-*.md)": {
+      "main": [
+        [{ "node": "Respond (saved, ephemeral)", "type": "main", "index": 0 }],
+        [{ "node": "Respond (failed, ephemeral)", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": [{ "name": "brain" }, { "name": "ingestion" }, { "name": "slack" }]
+}

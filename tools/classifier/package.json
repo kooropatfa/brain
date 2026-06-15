@@ -1,0 +1,15 @@
+{
+  "name": "@brain/classifier",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The ingestion Action's brain: reads brain.config.yml dimensions, parses _inbox captures, and builds the context the headless Claude classifier files notes + cross-links + follow-up issues from.",
+  "bin": {
+    "brain-classify-context": "./context.mjs"
+  },
+  "scripts": {
+    "context": "node context.mjs",
+    "test": "node test.mjs"
+  },
+  "license": "UNLICENSED"
+}

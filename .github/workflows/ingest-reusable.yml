@@ -1,0 +1,261 @@
+name: Ingest _inbox captures (reusable)
+
+# v1 compatibility contract: within v1, never add a required input/secret and never rename this file — stamped shims cannot be centrally fixed.
+#
+# The heart of feeding (the-brain-concept.md §6): a push into a knowledge repo's _inbox/ fires that
+# repo's thin shim (template: brain-init's templates/workflows/ingest.yml), which calls THIS
+# reusable workflow. It runs Claude headless to classify each new capture by dimension, distil it
+# into a clean note, file it under the right dimension folder with [[cross-links]], remove the
+# capture from _inbox/, open a PR, and create follow-up issues for action items. The PR + issues
+# ARE the notification — a human steward reviews and merges (promote: ask-each-time). The pipeline
+# never merges its own PRs.
+#
+# Trigger contract — lives in the SHIM, not here (workflow_call only reacts to the caller's event):
+#   - push to the default branch ONLY, paths _inbox/**. Without the branch filter the pipeline
+#     also fired on brain-sync/capture-* contribute branches — and a new branch's first push has
+#     an all-zeros `before` SHA, which makes new-captures.mjs fall back to "every capture present
+#     in _inbox/" → mass-ingestion of anything lying there (saw it ingest 5 leftover demo captures
+#     + open duplicate PRs). Captures on contribute branches are ingested when their PR merges.
+#   - workflow_dispatch with an optional `capture` input for manual re-runs; the shim threads it
+#     through the `capture` input below.
+#   - concurrency `ingest-${{ github.ref }}` is declared in the shim (don't let two pushes race on
+#     the same branch's ingestion) — `github.ref` must be evaluated in the caller.
+#
+# Context note: under workflow_call the `github` context belongs to the CALLER's event, so
+# `github.event.before` / `github.sha` below still describe the knowledge repo's push.
+
+on:
+  workflow_call:
+    inputs:
+      capture:
+        description: "Specific _inbox capture path to ingest (optional)"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: false
+
+permissions:
+  contents: write        # create the ingest branch + commit the note + capture removal
+  pull-requests: write   # open the PR (the notification)
+  issues: write          # create follow-up issues for action items
+
+jobs:
+  # Instances running `ingestion: local` (brain.config.yml) have no ANTHROPIC_API_KEY secret —
+  # the session agent classifies and files captures itself, so this pipeline stands down cleanly
+  # instead of failing red on the missing key.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.key.outputs.run }}
+    steps:
+      - name: Check for ANTHROPIC_API_KEY
+        id: key
+        env:
+          HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+        run: |
+          echo "run=$HAS_KEY" >> "$GITHUB_OUTPUT"
+          [ "$HAS_KEY" = "true" ] || echo "No ANTHROPIC_API_KEY — local-ingestion instance; skipping CI ingestion."
+
+  ingest:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      # Default repository under workflow_call = the CALLER's knowledge repo (where the captures live).
+      - name: Checkout the knowledge repo (full history — diff needs the before-sha)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The pipeline tools live in the engine repo, pinned by tag — a bot PR in the knowledge repo
+      # can never alter the code that processes it. Bump the tag to upgrade every knowledge repo.
+      # Tag-skew note: uses:@v1 resolves at job-queue time; this checkout resolves v1 at run time —
+      # a mid-run tag move can pair different revisions. This is unfixable upstream; acknowledged.
+      - name: Checkout engine
+        uses: actions/checkout@v4
+        with:
+          repository: kooropatfa/brain
+          ref: v1
+          path: .engine
+
+      - name: Verify engine checkout
+        run: test -f .engine/tools/classifier/new-captures.mjs || { echo "engine checkout incomplete or tag broken"; exit 1; }
+
+      # Later steps (the normalize commit-back, the classifier's ingest commit) run `git add` in
+      # the knowledge repo; .engine is a nested checkout that must never ride along into a
+      # knowledge commit. info/exclude is local to this runner — it does not touch the caller's
+      # tracked .gitignore.
+      - name: Keep the engine checkout out of the knowledge repo's git index
+        run: mkdir -p .git/info && echo ".engine/" >> .git/info/exclude
+
+      - name: Set up Node (for the classifier helpers)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Normalize raw inbox drops (Dropbox mode)
+        id: normalize
+        run: |
+          set -euo pipefail
+          # Anything in this push that landed in _inbox/ but is NOT a schema-shaped capture
+          # (a PDF, a screenshot, a stray note, …) gets converted into one: text embedded,
+          # binaries parked in _attachments/, unreadable formats flagged for a human.
+          node .engine/tools/normalizer/normalize-drops.mjs \
+            --base '${{ github.event.before }}' \
+            --head '${{ github.sha }}' > /tmp/normalize-report.json
+          cat /tmp/normalize-report.json
+          COUNT="$(node -p 'JSON.parse(require("fs").readFileSync("/tmp/normalize-report.json","utf8")).count')"
+          NORMALIZED="$(node -p 'JSON.parse(require("fs").readFileSync("/tmp/normalize-report.json","utf8")).captures.join("\n")')"
+          UNCLEAR="$(node -p 'JSON.stringify(JSON.parse(require("fs").readFileSync("/tmp/normalize-report.json","utf8")).unclear)')"
+          {
+            echo "count=$COUNT"
+            echo "unclear=$UNCLEAR"
+            echo "captures<<__NORMALIZED_EOF__"
+            echo "$NORMALIZED"
+            echo "__NORMALIZED_EOF__"
+          } >> "$GITHUB_OUTPUT"
+          if [ "$COUNT" != "0" ]; then
+            # Commit the normalization back to the pushed branch so the ingest PR diffs cleanly
+            # against it (capture present on the branch → removed by the PR, like every capture).
+            # A GITHUB_TOKEN push does NOT retrigger workflows, so this cannot loop.
+            git config user.name  "brain ingestion"
+            git config user.email "ingestion@users.noreply.github.com"
+            git add -A
+            git commit -m "Normalize inbox drops: $COUNT raw file(s) → capture(s)"
+            git pull --rebase origin "$GITHUB_REF_NAME" || true
+            git push origin "HEAD:$GITHUB_REF_NAME"
+          fi
+
+      - name: Detect new captures
+        id: detect
+        env:
+          CAPTURE_INPUT: ${{ inputs.capture }}
+        run: |
+          set -euo pipefail
+          if [ -n "$CAPTURE_INPUT" ]; then
+            # The caller passed an explicit capture path (workflow_dispatch on the shim).
+            CAPTURES="$CAPTURE_INPUT"
+          else
+            # Push event: diff the before..after range. github.event.before is all-zeros on a
+            # branch's first push; new-captures.mjs falls back to "all present captures" there.
+            CAPTURES="$(node .engine/tools/classifier/new-captures.mjs \
+              --base '${{ github.event.before }}' \
+              --head '${{ github.sha }}')"
+          fi
+          # Captures the normalizer just generated from raw drops are not in the push range —
+          # merge them in (they're already committed to the branch by the step above).
+          NORMALIZED="${{ steps.normalize.outputs.captures }}"
+          CAPTURES="$(printf '%s\n%s\n' "$CAPTURES" "$NORMALIZED" | grep . | sort -u || true)"
+          echo "Captures to ingest:"
+          echo "$CAPTURES"
+          # Stash for the next step (multiline → GITHUB_OUTPUT via a heredoc delimiter).
+          {
+            echo "captures<<__CAPTURES_EOF__"
+            echo "$CAPTURES"
+            echo "__CAPTURES_EOF__"
+          } >> "$GITHUB_OUTPUT"
+          # Count for the gate below.
+          COUNT="$(printf '%s\n' "$CAPTURES" | grep -c . || true)"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Nothing to ingest
+        if: steps.detect.outputs.count == '0'
+        run: echo "No new captures in _inbox/ for this push — schema/template edits don't trigger ingestion. Exiting cleanly."
+
+      - name: Build the classifier prompt
+        id: prompt
+        if: steps.detect.outputs.count != '0'
+        env:
+          UNCLEAR: ${{ steps.normalize.outputs.unclear }}
+        run: |
+          set -euo pipefail
+          # The spec/prompt that is the Action's brain.
+          PROMPT_BODY="$(cat .engine/tools/classifier/PROMPT.md)"
+          # Per-capture context packs (config-driven dimensions + parsed frontmatter + filing targets),
+          # so the classifier reasons from facts, not guesses.
+          CONTEXT=""
+          while IFS= read -r cap; do
+            [ -z "$cap" ] && continue
+            PACK="$(node .engine/tools/classifier/context.mjs --repo . --capture "$cap")"
+            CONTEXT="${CONTEXT}"$'\n\n### Context pack for `'"${cap}"$'`\n```json\n'"${PACK}"$'\n```'
+          done <<< "${{ steps.detect.outputs.captures }}"
+
+          {
+            echo "prompt<<__PROMPT_EOF__"
+            echo "$PROMPT_BODY"
+            echo ""
+            echo "---"
+            echo ""
+            echo "## This run"
+            echo ""
+            echo "The Brain engine (its tool scripts included) is checked out under \`.engine/\` in"
+            echo "this workspace — wherever these instructions reference a \`tools/...\` path, run it as"
+            echo "\`.engine/tools/...\`. The knowledge files (_inbox/, dimension folders, decisions/) are"
+            echo "at the repo root as usual."
+            echo ""
+            echo "Captures to ingest (process each):"
+            echo '```'
+            echo "${{ steps.detect.outputs.captures }}"
+            echo '```'
+            echo "$CONTEXT"
+            if [ -n "$UNCLEAR" ] && [ "$UNCLEAR" != "[]" ]; then
+              echo ""
+              echo "## Raw-drop normalization — unclear items (this run)"
+              echo ""
+              echo "The normalizer converted raw inbox drops it could not read into stub captures, each"
+              echo "carrying a question. For every item below you MUST: (1) include the exact phrase"
+              echo "'schema violation' in the PR body (routes it to a human — do NOT open as draft), and"
+              echo "(2) copy the question verbatim into an '## Agent questions' section of the PR body"
+              echo "so the steward sees exactly what is being asked."
+              echo '```json'
+              echo "$UNCLEAR"
+              echo '```'
+            fi
+            echo "__PROMPT_EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run the headless classifier (claude -p)
+        if: steps.detect.outputs.count != '0'
+        # Hard wall-clock cap: a healthy single-capture run is ~2-5 min; 15 lets a slow npm
+        # install + a few tool retries through but kills a genuine hang long before GitHub's
+        # 6h default (the first attempt hung silently after `npm install` with no output).
+        timeout-minutes: 15
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}   # gh CLI auth for the PR + issues; git ops use the same token
+          PROMPT: ${{ steps.prompt.outputs.prompt }}
+        run: |
+          set -euo pipefail
+          # NOTE: we drive `claude -p` headless directly rather than anthropics/claude-code-action@v1,
+          # because that action only accepts entity events (issues/PR/comment) and the automation set
+          # {workflow_dispatch, repository_dispatch, schedule, workflow_run} — it rejects `push` with
+          # "Unsupported event type: push". A push into _inbox/ is exactly our trigger, so the CLI
+          # (the other headless path named in the-brain-concept.md §6) is the right tool here.
+
+          # Identify Claude as the ingestion bot for any commits/PR it authors.
+          git config user.name  "brain ingestion"
+          git config user.email "ingestion@users.noreply.github.com"
+
+          npm install -g @anthropic-ai/claude-code
+
+          # Prompt goes to a FILE and is passed positionally (claude [options] [prompt]) — NOT piped
+          # on stdin. Piping the prompt while the CLI also wants stdin for anything else deadlocks
+          # (the first run hung right after npm install with zero output — catalogue C3).
+          printf '%s' "$PROMPT" > /tmp/ingest-prompt.txt
+
+          # Headless-safe invocation:
+          #   --bare              skip hooks/LSP/keychain/auto-discovery; auth strictly via ANTHROPIC_API_KEY
+          #   --permission-mode bypassPermissions  auto-approve tool calls — `acceptEdits` only covers
+          #       file edits, so Bash(git/gh/node) calls would still block on an approval prompt nobody
+          #       answers in CI (the suspected hang). Safe here: isolated, ephemeral CI runner.
+          #   --max-budget-usd    cost/runaway-loop ceiling (this CLI has no --max-turns)
+          #   prompt passed positionally via "$(cat …)"
+          claude -p "$(cat /tmp/ingest-prompt.txt)" \
+            --bare \
+            --model claude-opus-4-8 \
+            --permission-mode bypassPermissions \
+            --allowedTools "Read,Write,Edit,Glob,Grep,Bash(node:*),Bash(git:*),Bash(gh:*)" \
+            --max-budget-usd 5 \
+            --output-format text

@@ -1,0 +1,29 @@
+{
+  "collapse-filter": true,
+  "search": "",
+  "showTags": false,
+  "showAttachments": false,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    { "query": "path:technical/", "color": { "a": 1, "rgb": 5431378 } },
+    { "query": "path:business/", "color": { "a": 1, "rgb": 14701138 } },
+    { "query": "path:product/", "color": { "a": 1, "rgb": 5944811 } },
+    { "query": "path:design/", "color": { "a": 1, "rgb": 14924646 } },
+    { "query": "path:user/", "color": { "a": 1, "rgb": 7693260 } },
+    { "query": "path:decisions/", "color": { "a": 1, "rgb": 9923917 } },
+    { "query": "path:_inbox/", "color": { "a": 1, "rgb": 8355711 } }
+  ],
+  "collapse-display": false,
+  "showArrow": true,
+  "textFadeMultiplier": 0,
+  "nodeSizeMultiplier": 1,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": false,
+  "centerStrength": 0.5,
+  "repelStrength": 10,
+  "linkStrength": 1,
+  "linkDistance": 250,
+  "scale": 1
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "brain",
+  "description": "Connect your coding agent to any number of Brain knowledge repos: session-start sync, read-before-work, and 'add this to the brain' -> PR.",
+  "owner": { "name": "Brain contributors" },
+  "plugins": [
+    {
+      "name": "brain",
+      "source": ".",
+      "description": "Connect your coding agent to any number of Brain knowledge repos: session-start sync, read-before-work, and 'add this to the brain' -> PR.",
+      "author": { "name": "Brain contributors" },
+      "category": "productivity",
+      "homepage": "https://github.com/kooropatfa/brain",
+      "tags": ["knowledge", "memory", "team", "brain"]
+    }
+  ]
+}

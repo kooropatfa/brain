@@ -1,0 +1,23 @@
+# Thin shim — all logic lives in the Brain engine, pinned to the MOVING major tag v1: engine upgrades arrive automatically. Pin a commit SHA instead of v1 to freeze; a breaking engine release ships as @v2.
+# Secrets: none beyond GITHUB_TOKEN.
+name: Review + auto-merge ingestion PRs
+on:
+  workflow_run:
+    workflows: ["Ingest _inbox captures"]   # must match ingest.yml's `name:` exactly
+    types: [completed]
+concurrency:
+  group: review-ingest-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write          # gh label create on escalate path goes through the issues endpoint
+jobs:
+  review:
+    uses: kooropatfa/brain/.github/workflows/review-ingest-reusable.yml@v1
+    # Clean ingestion PRs are auto-merged (approve + squash) by default. To require a human merge
+    # instead, add `auto_merge: false` to the `with:` block below.
+    with:
+      # The workflow_run event exists only here in the shim — thread what the engine needs.
+      conclusion: ${{ github.event.workflow_run.conclusion }}
+    secrets: inherit

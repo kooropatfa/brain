@@ -1,0 +1,112 @@
+{
+  "name": "meet-to-inbox",
+  "meta": {
+    "description": "Receives a Google Meet transcript POSTed by the Apps Script poller, normalizes it into the m2 _inbox schema (source: meet), and writes _inbox/meet-<ts>.md to the Brain repo via the GitHub Contents API. That push fires m3's ingest.yml. START path of Brain meeting-capture pipeline (the-brain-concept.md §6). Host: Railway."
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "meet-transcript",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-in",
+      "name": "Webhook (Apps Script POST)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "meet-transcript"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// === meet-to-inbox: auth check + normalize into m2 schema-v1 capture ===\n// This is the body of integrations/n8n/normalize.js, inlined for the n8n Code node, plus a\n// shared-secret check on the inbound POST. Keep in lock-step with normalize.js (its test guards it).\n//\n// Inbound (from the Apps Script poller, JSON body):\n//   { secret, transcript, captured, title?, participants?, file?, tags? }\n// Env (n8n: Settings → Variables, or container env):\n//   N8N_WEBHOOK_SECRET  — shared secret the poller must present\n\nconst body = $input.first().json.body || $input.first().json;\n\n// --- 1. authenticate the caller (reject unauthenticated POSTs) ---\nconst expected = $env.N8N_WEBHOOK_SECRET;\nif (!expected) { throw new Error('meet-to-inbox: N8N_WEBHOOK_SECRET is not set on this n8n instance'); }\nif (!body || body.secret !== expected) {\n  // Surface as a clean 401 via the error branch / Respond node.\n  throw new Error('meet-to-inbox: bad or missing shared secret');\n}\n\n// --- 2. normalize (mirror of normalize.js buildCapture) ---\nconst p2 = (n) => String(n).padStart(2, '0');\nconst stampFromISO = (iso) => { const d = new Date(iso); if (Number.isNaN(d.getTime())) throw new Error(`invalid 'captured': ${iso}`); return `${d.getUTCFullYear()}-${p2(d.getUTCMonth()+1)}-${p2(d.getUTCDate())}-${p2(d.getUTCHours())}${p2(d.getUTCMinutes())}`; };\nconst canonicalISO = (iso) => { const d = new Date(iso); if (Number.isNaN(d.getTime())) throw new Error(`invalid 'captured': ${iso}`); return d.toISOString().replace(/\\.\\d{3}Z$/, 'Z'); };\nconst yamlStr = (s) => `\"${String(s).replace(/\\\\/g,'\\\\\\\\').replace(/\"/g,'\\\\\"')}\"`;\nconst yamlList = (items) => `[${items.map((it)=>{const s=String(it).trim(); return /^[A-Za-z0-9_\\-.]+$/.test(s)?s:yamlStr(s);}).join(', ')}]`;\n\nconst transcript = body.transcript;\nif (typeof transcript !== 'string' || transcript.trim() === '') throw new Error(\"'transcript' is required\");\nif (!body.captured) throw new Error(\"'captured' (ISO-8601 UTC) is required\");\n\nconst capturedISO = canonicalISO(body.captured);\nconst stamp = stampFromISO(body.captured);\nlet title = (body.title || '').trim();\nif (!title) { const fl = transcript.trim().split('\\n')[0].replace(/\\s+/g,' ').slice(0,80); title = fl ? `Meeting transcript — ${fl}` : `Meeting transcript (${stamp})`; }\nconst participants = Array.isArray(body.participants) ? body.participants.map((x)=>String(x).trim()).filter(Boolean) : [];\nconst tags = Array.isArray(body.tags) ? body.tags.map((x)=>String(x).trim()).filter(Boolean) : [];\nconst file = (body.file || '').trim();\n\nconst fm = ['---','source:    meet',`captured:  ${capturedISO}`,`title:     ${yamlStr(title)}`];\nif (participants.length) fm.push(`participants: ${yamlList(participants)}`);\nif (file) fm.push(`file:      ${yamlStr(file)}`);\nif (tags.length) fm.push(`tags:      ${yamlList(tags)}`);\nfm.push('---');\nconst content = `${fm.join('\\n')}\\n\\n${transcript.replace(/\\s+$/,'')}\\n`;\nconst filename = `meet-${stamp}.md`;\n\n// --- 3. emit fields the GitHub PUT node consumes ---\nreturn [{ json: {\n  path: `_inbox/${filename}`,\n  filename,\n  capturedISO,\n  // GitHub Contents API wants base64-encoded content\n  contentB64: Buffer.from(content, 'utf8').toString('base64'),\n  commitMessage: `feat(inbox): meet capture ${filename}`,\n  // repo target is an env var — NOT parsed from brain.config.yml (set BRAIN_REPO per deployment)\n  brainRepo: $env.BRAIN_REPO || 'your-org/brain',\n  branch: $env.BRAIN_BRANCH || 'main'\n} }];"
+      },
+      "id": "normalize",
+      "name": "Normalize → m2 capture",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.github.com/repos/{{ $json.brainRepo }}/contents/{{ $json.path }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Accept", "value": "application/vnd.github+json" },
+            { "name": "X-GitHub-Api-Version", "value": "2022-11-28" },
+            { "name": "User-Agent", "value": "brain-meet-to-inbox" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"message\": {{ JSON.stringify($json.commitMessage) }},\n  \"content\": {{ JSON.stringify($json.contentB64) }},\n  \"branch\": {{ JSON.stringify($json.branch) }}\n}",
+        "options": {
+          "response": { "response": { "fullResponse": false } }
+        }
+      },
+      "id": "github-put",
+      "name": "GitHub Contents API (PUT _inbox/meet-*.md)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 240],
+      "credentials": {
+        "httpHeaderAuth": { "id": "github-token", "name": "GitHub token (Authorization: Bearer)" }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": true,\n  \"path\": {{ JSON.stringify($('Normalize → m2 capture').item.json.path) }},\n  \"commit\": {{ JSON.stringify($json.commit && $json.commit.sha ? $json.commit.sha : null) }}\n}",
+        "options": { "responseCode": 201 }
+      },
+      "id": "respond-ok",
+      "name": "Respond 201 (created)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [960, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": false,\n  \"error\": {{ JSON.stringify($json.error && $json.error.message ? $json.error.message : 'meet-to-inbox failed') }}\n}",
+        "options": { "responseCode": 400 }
+      },
+      "id": "respond-err",
+      "name": "Respond 4xx (rejected)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [720, 460]
+    }
+  ],
+  "connections": {
+    "Webhook (Apps Script POST)": {
+      "main": [[{ "node": "Normalize → m2 capture", "type": "main", "index": 0 }]]
+    },
+    "Normalize → m2 capture": {
+      "main": [
+        [{ "node": "GitHub Contents API (PUT _inbox/meet-*.md)", "type": "main", "index": 0 }],
+        [{ "node": "Respond 4xx (rejected)", "type": "main", "index": 0 }]
+      ]
+    },
+    "GitHub Contents API (PUT _inbox/meet-*.md)": {
+      "main": [
+        [{ "node": "Respond 201 (created)", "type": "main", "index": 0 }],
+        [{ "node": "Respond 4xx (rejected)", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": [{ "name": "brain" }, { "name": "ingestion" }, { "name": "meet" }]
+}

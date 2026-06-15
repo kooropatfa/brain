@@ -1,0 +1,5 @@
+# Per-machine / volatile Obsidian state — committed config is the portable vault contract;
+# these files are local UI layout and caches and must NOT be shared.
+workspace.json
+workspace-mobile.json
+cache/

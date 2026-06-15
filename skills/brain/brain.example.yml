@@ -1,0 +1,53 @@
+# brain.example.yml — copy this to configure the skill. ALL fields are optional;
+# the skill works with zero config. Full spec: skills/brain/references/configuration.md.
+#
+# Copy it under either name, into any (or several) of the four config layers:
+#
+#   • brain.yml   — generic: applies to ALL Brains in that scope
+#   • <name>.yml  — per-brain: applies to ONE Brain (<name> = the clone dir under ~/.brain/, e.g. mybrain.yml)
+#
+# Precedence, low → high (later wins):
+#   1. ~/.config/brain.yml       machine-wide, all Brains          (personal — don't commit)
+#   2. ~/.config/<name>.yml      machine-wide, one Brain           (personal — don't commit)
+#   3. <project>/brain.yml       project-wide, all Brains bound    (commit it)
+#   4. <project>/<name>.yml      project-wide, one Brain           (commit it — most specific, always wins)
+#
+# brain.config.yml (inside the knowledge repo) is NOT one of these layers — it holds the SHARED
+# facts: the repo, its dimensions, the default branch, the ingestion mode. Don't duplicate those
+# here; this file is for BEHAVIOR + paths.
+
+# ── where the Brain lives ────────────────────────────────────────────────────
+# brain_dir: ~/.brain/<name>   # where the local clone lives (same as the BRAIN_DIR env var).
+#                              # IDENTITY KNOB: honored only from the name-specific layers
+#                              # (~/.config/<name>.yml, <project>/<name>.yml) — ignored in a generic
+#                              # brain.yml, where it would map every bound Brain onto one clone.
+
+# ── session-start behavior ───────────────────────────────────────────────────
+# auto_pull: true        # pull the Brain on session start so it's current. false = read the existing
+#                        # clone without pulling (e.g. you're offline or pull manually).
+# preflight: quiet       # quiet = one line when synced (or silent); off = no session-start message
+#                        # at all; verbose = always print what preflight did.
+
+# ── proactive capture (the "want me to save this?" offers) ───────────────────
+# proactive: true        # false = never offer on its own; only act when you explicitly ask. Some
+#                        # people find offers helpful, some find them noisy — your call.
+# offer_cap: 2           # max proactive offers per session. 0 has the same effect as proactive: false.
+
+# ── automatic session capture (the SessionEnd hook) ─────────────────────────
+# session_capture: off   # on = when a Claude Code session ends, a hook distils any durable knowledge
+#                        # (decisions, specs, non-obvious insights) into a capture and opens a Brain
+#                        # PR. Off by default: the hook fires in EVERY project you use Claude in, so
+#                        # turn it on per work repo (commit it there — the whole team captures) or in
+#                        # your personal file. Trivial sessions are skipped automatically (SKIP gate).
+# session_capture_model: haiku   # model for the end-of-session summarizer call.
+# session_capture_min_lines: 30  # transcripts shorter than this are skipped without a summarizer call.
+
+# ── reading the Brain ────────────────────────────────────────────────────────
+# dimensions: []         # restrict which dimension folders the agent loads first, e.g.
+#                        # [technical, product] for a backend engineer. Empty = all of them. (You
+#                        # still have access to every folder; this is only the default reading focus.)
+
+# ── advanced ─────────────────────────────────────────────────────────────────
+# config_path: /abs/path/to/brain.config.yml   # override brain.config.yml discovery (= $BRAIN_CONFIG)
+# token_env: GH_TOKEN    # name of the env var holding the GitHub token.
+#                        # IDENTITY KNOB — name-specific layers only, like brain_dir.

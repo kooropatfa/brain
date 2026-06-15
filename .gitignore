@@ -1,0 +1,11 @@
+# Traktor / agent local artifacts (never committed)
+.agent-heartbeat
+.agent-session.md
+.agent-beacon.local.json
+*.beacon.json
+
+# OS / editor noise
+.DS_Store
+
+# Brainstorm visual-companion sessions (local mockups, never committed)
+.superpowers/

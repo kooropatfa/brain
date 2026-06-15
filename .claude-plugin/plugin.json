@@ -1,0 +1,9 @@
+{
+  "name": "brain",
+  "description": "Connect your coding agent to any number of Brain knowledge repos: session-start sync, read-before-work, and 'add this to the brain' -> PR.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Brain contributors"
+  },
+  "homepage": "https://github.com/kooropatfa/brain"
+}
