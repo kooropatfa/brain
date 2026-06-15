@@ -104,7 +104,7 @@ They have repo access — their own Brain on a new machine, or a shared private 
 granted access to. Same path either way.
 1. Get the repo as `<owner/name>`.
 2. `node <plugin>/tools/brain-sync/brain-sync.mjs connect --repo <owner/name>` — clones it to `~/.brain/<name>` (name = repo basename).
-3. Write `<project>/.brains.yml` with `use: [<name>]` (the basename from step 1).
+3. Write `<project>/.brains.yml` with `use: [<name>]` (the repo basename).
 4. Confirm: bound — next session's preflight (§1) syncs it; "add this to the brain" now opens PRs against it.
 
 ### CREATE — no Brain yet
@@ -130,9 +130,7 @@ Then:
 If they want neither yet, don't force it: write `.brains.yml` with `use: []` (explicit no-Brain — the
 SessionStart hook won't ask again) or leave it session-only, and stand down. Don't nag.
 
-(Flags above are exactly what the tools accept — verify against `tools/brain-init/brain-init.mjs` and
-`tools/brain-sync/brain-sync.mjs` before adding any. Matches the README's "Create a Brain" / "Join an
-existing Brain".)
+(Flags above are exactly what the tools accept.)
 
 ---
 
