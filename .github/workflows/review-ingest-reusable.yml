@@ -5,9 +5,13 @@ name: Review + auto-merge ingestion PRs (reusable)
 # The second half of the feeding loop (ADR-0002). The ingest pipeline opens a PR for each capture
 # but never merges (the Action is the notification). This workflow runs a deterministic, AI-free
 # structural reviewer (.engine/tools/reviewer/validate-ingest.mjs) over each ingestion PR and:
-#   - auto-merges (approve + squash) the ones that match the known-safe diff shape with no
-#     confidence flags — this is the DEFAULT; callers opt OUT (comment-only, human merges) by
-#     passing `auto_merge: false` from their shim, OR
+#   - auto-merges (squash) the ones that match the known-safe diff shape with no confidence flags —
+#     this is the DEFAULT; callers opt OUT (comment-only, human merges) by passing
+#     `auto_merge: false` from their shim. The squash-merge is the load-bearing action; a `gh pr
+#     review --approve` is attempted only best-effort, because this workflow runs as the same
+#     github-actions[bot] that AUTHORED the PR and GitHub forbids approving your own pull request
+#     (it would always exit non-zero and, under `set -e`, abort the step before the merge — the
+#     original failure). No branch protection means the merge needs no approval anyway, OR
 #   - escalates anything questionable to a human (needs-human label + a review comment naming the
 #     exact failing check). It NEVER touches human/feature PRs (those keep promote: ask-each-time).
 #
@@ -140,8 +144,20 @@ jobs:
             echo "DRY-RUN: would have approved + squash-merged PR #$PR"
             exit 0
           fi
-          gh pr review "$PR" --repo "$GITHUB_REPOSITORY" --approve --body \
+          # The MERGE is the load-bearing action. The approve is BEST-EFFORT only:
+          # this workflow runs as github-actions[bot] with the default GITHUB_TOKEN, and the
+          # ingestion PR is *authored* by that same bot — GitHub rejects "Can not approve your own
+          # pull request", so `gh pr review --approve` ALWAYS exits non-zero here. With `set -e` that
+          # used to abort the step before the merge ran (the observed failure). It is also unnecessary:
+          # with no branch protection `gh pr merge --squash` carries the decision on its own. We still
+          # post the verdict summary as a PR comment (the audit trail), then attempt the approve as a
+          # courtesy (it WILL succeed once a separate reviewer identity / PAT is wired up, or be a
+          # harmless no-op now), guarding it so it can never abort the merge.
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body \
             "🟢 Structural review passed. $SUMMARY Auto-merging per ADR-0002 (ingestion-PR auto-merge)."
+          gh pr review "$PR" --repo "$GITHUB_REPOSITORY" --approve --body \
+            "🟢 Structural review passed. $SUMMARY Auto-merging per ADR-0002 (ingestion-PR auto-merge)." \
+            || echo "approve skipped (self-authored PR / no permission) — merge below carries the decision"
           gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash --delete-branch
 
       - name: Escalate (flagged PR)
