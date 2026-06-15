@@ -142,3 +142,81 @@ Set `GH_TOKEN` as a user environment variable so the task sees it:
 
 > Prefer not to run a resident process? Schedule `--once` on an interval instead (cron /
 > `OnIdle` trigger): same script, batch mode.
+
+## One watcher per Brain
+
+The drop-folder is **per-Brain**: each Brain clone you feed needs its own watcher instance, its
+own `--drop <folder>`, and its own `--brain <clone-dir>`. A single process watches exactly one
+clone and moves files into it — there is no "multi-brain" mode.
+
+**Auto-discovery only works with a single clone.** When `--brain` is omitted and there is
+exactly one clone under `~/.brain`, the watcher uses it automatically. As soon as you add a second
+clone, it errors:
+
+```
+several clones under /Users/YOU/.brain (muzg-knowledge, hooper-brain) — pick one with --brain
+```
+
+So with N brains you must run N service units, each with distinct `--drop` / `--brain` / service
+name values.
+
+**Example: two brains on macOS (launchd)**
+
+`~/Library/LaunchAgents/com.brain.inbox-watch.muzg-knowledge.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.brain.inbox-watch.muzg-knowledge</string>
+  <key>ProgramArguments</key><array>
+    <string>/usr/local/bin/node</string>
+    <string>/Users/YOU/.brain/muzg-knowledge/tools/inbox-watch/inbox-watch.mjs</string>
+    <string>--brain</string><string>/Users/YOU/.brain/muzg-knowledge</string>
+    <string>--drop</string><string>/Users/YOU/Drop-personal</string>
+  </array>
+  <key>EnvironmentVariables</key><dict>
+    <key>GH_TOKEN</key><string>ghp_your_token_here</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardErrorPath</key><string>/tmp/inbox-watch-muzg.log</string>
+</dict></plist>
+```
+
+`~/Library/LaunchAgents/com.brain.inbox-watch.hooper-brain.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.brain.inbox-watch.hooper-brain</string>
+  <key>ProgramArguments</key><array>
+    <string>/usr/local/bin/node</string>
+    <string>/Users/YOU/.brain/hooper-brain/tools/inbox-watch/inbox-watch.mjs</string>
+    <string>--brain</string><string>/Users/YOU/.brain/hooper-brain</string>
+    <string>--drop</string><string>/Users/YOU/Drop-work</string>
+  </array>
+  <key>EnvironmentVariables</key><dict>
+    <key>GH_TOKEN</key><string>ghp_your_token_here</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardErrorPath</key><string>/tmp/inbox-watch-hooper.log</string>
+</dict></plist>
+```
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.brain.inbox-watch.muzg-knowledge.plist
+launchctl load ~/Library/LaunchAgents/com.brain.inbox-watch.hooper-brain.plist
+```
+
+Each unit has a unique `Label`, its own `--brain` clone, and its own `--drop` folder. On Linux,
+give each `systemd` unit a distinct filename (e.g. `inbox-watch-muzg.service`,
+`inbox-watch-hooper.service`) and set the same two flags in `ExecStart`.
+
+**Service environments and the engine plugin.** Service managers (launchd, systemd) do not run
+your shell profile, so the normalizer plugin may not be on PATH. Pass `--engine <path>` or set
+`$BRAIN_ENGINE` in the unit's `EnvironmentVariables` / `Environment=` block to point directly at
+`tools/normalizer/normalize-drops.mjs` inside the clone — the same fix that resolves the plugin in
+non-interactive shells.
