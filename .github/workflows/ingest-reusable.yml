@@ -148,6 +148,12 @@ jobs:
           # merge them in (they're already committed to the branch by the step above).
           NORMALIZED="${{ steps.normalize.outputs.captures }}"
           CAPTURES="$(printf '%s\n%s\n' "$CAPTURES" "$NORMALIZED" | grep . | sort -u || true)"
+          # Drop entries that no longer exist on disk: when the normalizer RENAMES a raw drop
+          # (e.g. a non-conventional `manual-...-foo.md` → `other-...-HHMM.md`), new-captures.mjs
+          # still reports the pre-rename name from the push diff, while the normalizer reports the
+          # post-rename one — the union would carry a stale path that context.mjs can't find and
+          # the run would die. Keep only paths that actually exist in the working tree.
+          CAPTURES="$(printf '%s\n' "$CAPTURES" | while IFS= read -r c; do [ -n "$c" ] && [ -f "$c" ] && echo "$c"; done || true)"
           echo "Captures to ingest:"
           echo "$CAPTURES"
           # Stash for the next step (multiline → GITHUB_OUTPUT via a heredoc delimiter).
