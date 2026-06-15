@@ -1,5 +1,8 @@
 # Thin shim — all logic lives in the Brain engine, pinned to the MOVING major tag v1: engine upgrades arrive automatically. Pin a commit SHA instead of v1 to freeze; a breaking engine release ships as @v2.
-# Secrets (flow via secrets: inherit): ANTHROPIC_API_KEY (optional — absent = pipeline stands down cleanly). Full contract: the reusable's header.
+# Secrets: ANTHROPIC_API_KEY (optional — absent = pipeline stands down cleanly). Passed BY NAME (not
+# `inherit`) because the engine reusable lives in a DIFFERENT org/repo (kooropatfa/brain) and GitHub
+# does not forward repo-level secrets across repos via `inherit`. The value stays in YOUR repo's
+# secret store; only the reference is mapped. Full contract: the reusable's header.
 name: Ingest _inbox captures
 on:
   push:
@@ -23,4 +26,5 @@ jobs:
     uses: kooropatfa/brain/.github/workflows/ingest-reusable.yml@v1
     with:
       capture: ${{ inputs.capture || '' }}
-    secrets: inherit
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

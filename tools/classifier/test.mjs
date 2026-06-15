@@ -12,7 +12,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const REPO = path.resolve(HERE, "..", "..");
 const CTX = path.join(HERE, "context.mjs");
 
 let failures = 0;
@@ -24,14 +23,30 @@ function runCtx(args) {
   return { code: r.status, json: r.stdout ? JSON.parse(r.stdout) : null, err: r.stderr };
 }
 
+// Build a throwaway knowledge repo on disk (config + dimension folders + infra + glossary), so the
+// config/targets test runs against a real Brain — NOT against the engine root, which carries no
+// brain.config.yml since the engine/knowledge split (the engine is never itself a Brain).
+function makeBrain(extra = "") {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "brain-classifier-test-"));
+  fs.writeFileSync(path.join(tmp, "brain.config.yml"),
+    "company: Test\nrepo: x/y\ndefault_branch: main\ndimensions:\n  - name: technical\n    blurb: t\ninfra_folders:\n  - _inbox\n  - decisions\nglossary_note: ubiquitous-language\n");
+  for (const d of ["_inbox", "decisions", "technical"]) fs.mkdirSync(path.join(tmp, d));
+  fs.writeFileSync(path.join(tmp, "technical", "index.md"), "# technical\n");
+  fs.writeFileSync(path.join(tmp, "decisions", "index.md"), "# decisions\n");
+  fs.writeFileSync(path.join(tmp, "ubiquitous-language.md"), "# glossary\n");
+  return tmp;
+}
+
 console.log("config + targets:");
 {
-  const { json } = runCtx(["--repo", REPO]);
+  const tmp = makeBrain();
+  const { json } = runCtx(["--repo", tmp]);
   ok(json.dimension_names.length >= 1, "dimensions read from brain.config.yml (not hardcoded)");
   ok(json.dimension_names.includes("technical"), "technical dimension present");
   ok(json.targets.dimensions.every((t) => t.exists), "every dimension folder exists on disk");
   ok(json.targets.decisions.exists, "decisions/ folder exists");
   ok(json.targets.glossary.exists, "glossary note exists");
+  fs.rmSync(tmp, { recursive: true, force: true });
 }
 
 console.log("valid captures (must validate clean):");

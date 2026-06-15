@@ -20,4 +20,5 @@ jobs:
     with:
       # The workflow_run event exists only here in the shim — thread what the engine needs.
       conclusion: ${{ github.event.workflow_run.conclusion }}
-    secrets: inherit
+    # No `secrets:` block — this reusable needs only the automatic GITHUB_TOKEN, which works
+    # cross-repo without forwarding.

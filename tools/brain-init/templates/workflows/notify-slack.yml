@@ -1,5 +1,7 @@
 # Thin shim — all logic lives in the Brain engine, pinned to the MOVING major tag v1: engine upgrades arrive automatically. Pin a commit SHA instead of v1 to freeze; a breaking engine release ships as @v2.
-# Secrets (flow via secrets: inherit): SLACK_WEBHOOK_URL (optional — absent = silent no-op). Full contract: the reusable's header.
+# Secrets: SLACK_WEBHOOK_URL (optional — absent = silent no-op). Passed BY NAME (not `inherit`)
+# because the engine reusable lives in a DIFFERENT org/repo (kooropatfa/brain) and GitHub does not
+# forward repo-level secrets across repos via `inherit`. The value stays in YOUR repo's secret store.
 name: Notify Slack — knowledge awaiting approval
 on:
   workflow_run:
@@ -23,4 +25,5 @@ jobs:
       # The triggering event exists only here in the shim — thread what the engine needs.
       event_name: ${{ github.event_name }}
       pr_title: ${{ github.event.pull_request.title || '' }}
-    secrets: inherit
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
