@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // inbox-watch.mjs — the Dropbox feel for the Brain. Watches a plain local folder; anything you
 // drop in it gets moved into the Brain clone's _inbox/, FORMATTED LOCALLY into a schema-v1
-// capture (tools/normalizer/normalize-drops.mjs --worktree: text embedded, binaries parked in
-// _attachments/), and pushed to the default branch, where the ingestion Action classifies and
-// files it. No Obsidian needed, no git knowledge needed — drag a file into a folder, the Brain
-// assimilates it. If local formatting ever fails, the raw file is pushed anyway and the Action's
-// own normalizer (range mode) formats it as the backstop.
+// capture (the ENGINE's tools/normalizer/normalize-drops.mjs --worktree: text embedded, binaries
+// parked in _attachments/), and pushed to the default branch, where the ingestion Action
+// classifies and files it. No Obsidian needed, no git knowledge needed — drag a file into a
+// folder, the Brain assimilates it. If local formatting ever fails, the raw file is pushed anyway
+// and the Action's own normalizer (range mode) formats it as the backstop.
 //
 // Cross-platform by construction: pure Node (macOS + Windows + Linux), zero deps, and a polling
 // scan instead of fs.watch (which is unreliable/inconsistent across platforms). A file is only
@@ -13,11 +13,31 @@
 // are never pushed. Per-OS service install (launchd / systemd / Task Scheduler): see README.md.
 //
 //   Usage:  node tools/inbox-watch/inbox-watch.mjs [--brain <clone-dir>] [--drop <folder>]
+//                                                  [--engine <brain-engine-dir>]
 //                                                  [--interval <seconds>] [--once]
 //   Defaults: --brain  $BRAIN_DIR, else the single clone under ~/.brain
 //             --drop   $DROP_DIR,  else the clone's own _inbox/ (watch-in-place)
 //             --interval 30
 //   --once: one scan + push, then exit (for testing and for cron-style schedulers).
+//
+// ENGINE RESOLUTION — the normalizer lives in the ENGINE, not in the knowledge clone. After the
+// engine/knowledge split, knowledge clones (~/.brain/<name>) carry NO tools/, so the normalizer
+// must be located in the engine (plugin or engine checkout). This tool also runs headless, as a
+// background service (launchd/systemd/Task Scheduler) with no Claude/plugin env, so the resolver
+// tries, in order, and the first existing path wins:
+//   1. $CLAUDE_PLUGIN_ROOT/tools/normalizer/normalize-drops.mjs  (set when run under the plugin)
+//   2. --engine <dir> / $BRAIN_ENGINE  →  <dir>/tools/normalizer/normalize-drops.mjs  (explicit
+//      override, e.g. baked into a service unit)
+//   3. an installed plugin auto-discovered by scanning
+//        ~/.claude/plugins/cache/*/*/*/tools/normalizer/normalize-drops.mjs   and
+//        ~/.claude/plugins/marketplaces/*/tools/normalizer/normalize-drops.mjs
+//      (newest by mtime if several) — how a background service finds it with no env
+//   4. backstop: this file's own sibling — tools/inbox-watch/ is next to tools/normalizer/ IN THE
+//      ENGINE, so <dir-of-inbox-watch.mjs>/../normalizer/normalize-drops.mjs (works when
+//      inbox-watch runs straight from the engine checkout/plugin)
+// If none exist it dies listing the paths tried; pass --engine <brain-engine-dir>, set
+// $BRAIN_ENGINE, or install the brain plugin. The --brain path stays the knowledge CLONE — it is
+// never conflated with the engine; only the normalizer SCRIPT PATH is engine-based.
 //
 // Auth: token from the env var named by `token_env:` in the clone's brain.config.yml (default
 // GH_TOKEN), falling back to `gh auth token`. Injected into the remote URL only for the push,
@@ -32,6 +52,9 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));   // dir of this inbox-watch.mjs
 
 const log = (m) => console.error(`inbox-watch[${new Date().toISOString()}]: ${m}`);
 const die = (m) => { log(m); process.exit(1); };
@@ -48,10 +71,11 @@ const opt = { interval: 30 };
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === "--brain") opt.brain = argv[++i];
   else if (argv[i] === "--drop") opt.drop = argv[++i];
+  else if (argv[i] === "--engine") opt.engine = argv[++i];
   else if (argv[i] === "--interval") opt.interval = parseInt(argv[++i], 10) || 30;
   else if (argv[i] === "--once") opt.once = true;
   else if (argv[i] === "--help" || argv[i] === "-h") {
-    console.log("Usage: inbox-watch [--brain <clone>] [--drop <folder>] [--interval <s>] [--once]");
+    console.log("Usage: inbox-watch [--brain <clone>] [--drop <folder>] [--engine <brain-engine-dir>] [--interval <s>] [--once]");
     process.exit(0);
   } else die("unknown arg: " + argv[i]);
 }
@@ -71,6 +95,77 @@ function resolveBrain() {
 const BRAIN = resolveBrain();
 if (!fs.existsSync(path.join(BRAIN, ".git"))) die(`${BRAIN} is not a git clone`);
 if (!fs.existsSync(path.join(BRAIN, "_inbox"))) die(`${BRAIN} has no _inbox/ — not a Brain clone?`);
+
+// ---- resolve the ENGINE normalizer (NOT in the knowledge clone — see header) ----
+// Glob a fixed-depth pattern of literal "*" segments under a root, returning matching files.
+// e.g. globFixed(cacheRoot, ["*", "*", "*", "tools", "normalizer", "normalize-drops.mjs"]).
+function globFixed(root, segs) {
+  let dirs = [root];
+  for (let i = 0; i < segs.length; i++) {
+    const seg = segs[i];
+    const last = i === segs.length - 1;
+    const next = [];
+    for (const d of dirs) {
+      if (seg === "*") {
+        let entries;
+        try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { continue; }
+        for (const e of entries) { if (e.isDirectory()) next.push(path.join(d, e.name)); }
+      } else {
+        const cand = path.join(d, seg);
+        try {
+          const st = fs.statSync(cand);
+          if (last ? st.isFile() : st.isDirectory()) next.push(cand);
+        } catch { /* missing */ }
+      }
+    }
+    dirs = next;
+  }
+  return dirs;
+}
+
+function resolveNormalizer() {
+  const tried = [];
+  const rel = ["tools", "normalizer", "normalize-drops.mjs"];
+  const tryFile = (p) => { tried.push(p); return fs.existsSync(p) ? p : null; };
+
+  // 1. plugin root (set when invoked under the plugin)
+  if (process.env.CLAUDE_PLUGIN_ROOT) {
+    const hit = tryFile(path.join(process.env.CLAUDE_PLUGIN_ROOT, ...rel));
+    if (hit) return { path: hit, via: "$CLAUDE_PLUGIN_ROOT" };
+  }
+  // 2. explicit --engine / $BRAIN_ENGINE override
+  const engineDir = opt.engine || process.env.BRAIN_ENGINE;
+  if (engineDir) {
+    const hit = tryFile(path.join(path.resolve(engineDir), ...rel));
+    if (hit) return { path: hit, via: opt.engine ? "--engine" : "$BRAIN_ENGINE" };
+  }
+  // 3. auto-discover an installed plugin (newest by mtime if several)
+  const pluginsRoot = path.join(os.homedir(), ".claude", "plugins");
+  const candidates = [
+    // cache/<marketplace>/<plugin>/<version>/tools/normalizer/normalize-drops.mjs
+    ...globFixed(path.join(pluginsRoot, "cache"), ["*", "*", "*", ...rel]),
+    // marketplaces/<name>/tools/normalizer/normalize-drops.mjs
+    ...globFixed(path.join(pluginsRoot, "marketplaces"), ["*", ...rel]),
+  ];
+  if (candidates.length) {
+    const newest = candidates
+      .map((p) => { try { return { p, m: fs.statSync(p).mtimeMs }; } catch { return null; } })
+      .filter(Boolean)
+      .sort((a, b) => b.m - a.m)[0];
+    if (newest) { tried.push(`${pluginsRoot}/{cache,marketplaces}/**/${rel.join("/")}`); return { path: newest.p, via: "installed plugin (auto-discovered)" }; }
+  }
+  // 4. backstop: this file's sibling normalizer in the engine checkout/plugin
+  const sibling = tryFile(path.join(HERE, "..", "normalizer", "normalize-drops.mjs"));
+  if (sibling) return { path: sibling, via: "sibling (engine checkout)" };
+
+  die(
+    "cannot locate the engine normalizer (normalize-drops.mjs) — knowledge clones carry no tools/.\n" +
+    "  tried:\n" + tried.map((p) => `    - ${p}`).join("\n") + "\n" +
+    "  fix: set --engine <brain-engine-dir> or $BRAIN_ENGINE, or install the brain plugin."
+  );
+}
+const NORMALIZER = resolveNormalizer();
+log(`normalizer: ${NORMALIZER.path} (via ${NORMALIZER.via})`);
 
 // shared facts from the clone's own brain.config.yml (scalar-only read, like brain-sync)
 function readScalar(text, key) {
@@ -165,7 +260,7 @@ function cycle() {
   // the pipeline speaks. If this fails for any reason, push raw — the ingestion Action runs the
   // same normalizer in range mode as the backstop, nothing is ever lost.
   let normalized = 0;
-  const norm = run("node", [path.join(BRAIN, "tools", "normalizer", "normalize-drops.mjs"), "--worktree", "--repo", BRAIN]);
+  const norm = run("node", [NORMALIZER.path, "--worktree", "--repo", BRAIN]);
   if (norm.code === 0) {
     try {
       const report = JSON.parse(norm.out);
