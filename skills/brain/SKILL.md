@@ -42,6 +42,7 @@ That's it. The sections below are detail for when you need it.
 ## Config (optional — works with zero config)
 The engine ships in the plugin; knowledge repos contain no engine code. New machine + existing brain:
 `brain-sync connect --repo <owner/name>`. New brain from scratch: `tools/brain-init` (see SETUP.md).
+No `.brains.yml` binding yet (fresh install)? The agent walks you through connect-or-create — §0.5.
 
 Behavior is adjustable per-project and per-person via an optional `brain.yml`. Read it at session
 start and let it override the defaults below; if absent, use the defaults. See
@@ -90,6 +91,51 @@ from their phrasing ("put this in my work brain" -> work).
 
 ---
 
+## 0.5 First-run onboarding — connect or create
+Trigger this when the project has **no `.brains.yml` binding** (the hook printed the UNBOUND line, §0)
+**or** the user says "set up my brain" / "connect a brain" / "create a brain". Drive the conversation;
+don't just save a name blind. (This is the guided version of §0's "ask once, save the choice".)
+
+Ask first: **"Do you already have a knowledge repo (a Brain) you have access to, or should we create
+a new one?"** Then take one branch:
+
+### CONNECT — they already have a Brain (incl. joining a team/company Brain)
+They have repo access — their own Brain on a new machine, or a shared private knowledge repo they were
+granted access to. Same path either way.
+1. Get the repo as `<owner/name>`.
+2. `node <plugin>/tools/brain-sync/brain-sync.mjs connect --repo <owner/name>` — clones it to `~/.brain/<name>` (name = repo basename).
+3. Write `<project>/.brains.yml` with `use: [<name>]` (the basename from step 1).
+4. Confirm: bound — next session's preflight (§1) syncs it; "add this to the brain" now opens PRs against it.
+
+### CREATE — no Brain yet
+Gather, asking only for what's missing:
+- **name** — lowercase, no spaces (becomes the repo basename + clone dir, e.g. `mybrain`).
+- **org** — their GitHub user or org.
+- **company** — *optional* display name (defaults to the org).
+- **ingestion** — default `local` (no API key; you classify captures yourself, §3). `action` = a CI
+  pipeline classifies — needs an `ANTHROPIC_API_KEY` secret on the repo. (Optional `--dimensions
+  "name:blurb,name:blurb"` if they want a custom dimension set instead of the default five.)
+
+Then:
+1. `node <plugin>/tools/brain-init/brain-init.mjs --name <name> --org <org> [--company "<display>"] [--ingestion local|action] [--dimensions "<...>"]` — scaffolds a pure-data repo and prints **"Next steps"**.
+2. Walk them through those printed steps in order:
+   - `cd <name> && git init -b main && git add -A && git commit -m "init brain: <name>"`
+   - `gh repo create <org>/<name> --private --source . --push`
+   - if `ingestion: action`: `gh secret set ANTHROPIC_API_KEY --repo <org>/<name>`
+   - `node <plugin>/tools/brain-sync/brain-sync.mjs connect --repo <org>/<name>`
+   - write `<project>/.brains.yml` with `use: [<name>]`
+3. Confirm: bound and connected — next session's preflight (§1) syncs it.
+
+### NEITHER — not now
+If they want neither yet, don't force it: write `.brains.yml` with `use: []` (explicit no-Brain — the
+SessionStart hook won't ask again) or leave it session-only, and stand down. Don't nag.
+
+(Flags above are exactly what the tools accept — verify against `tools/brain-init/brain-init.mjs` and
+`tools/brain-sync/brain-sync.mjs` before adding any. Matches the README's "Create a Brain" / "Join an
+existing Brain".)
+
+---
+
 ## 1. Session-start preflight
 The plugin's **SessionStart hook** (`hooks/session-start-sync.mjs`) already runs this automatically —
 if a `🧠 Brain …` line is in your context, the sync is done; do NOT re-run preflight, just read the
@@ -114,8 +160,8 @@ clone) → **NEEDS-SETUP** (point at the README's install).
 - **DIVERGED:** `🧠 Brain: your local clone has diverged from the default branch (pull isn't fast-forward). I won't touch your edits — reconcile in <brain_dir> (commit/stash, then git pull --ff-only).`
 - **DEGRADED:** `🧠 Brain: can't reach GitHub — using the last-pulled copy (may be stale).`
 - **NEEDS-SETUP:** point at this skill's `README.md` (prerequisites one-liner + the two `/plugin` commands).
-- **UNBOUND:** the hook already printed the available Brains — ask the user, write `.brains.yml`,
-  then run preflight for the chosen Brain.
+- **UNBOUND:** the hook already printed the available Brains — run the first-run onboarding (§0.5):
+  ask connect-or-create, write `.brains.yml`, then run preflight for the chosen Brain.
 
 ---
 
