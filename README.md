@@ -7,6 +7,33 @@ understanding — read by every person *and every AI agent*, and fed by all of t
 > You tell your agent *"add this to the brain"* — and from the next session on, **everyone's**
 > agent knows it. That's the whole idea.
 
+---
+
+> ## ⚠️ Please read this before installing
+>
+> The easiest and safest way to install this is to **ask your AI agent** (Claude Code) to do it for
+> you — *"install the brain skill from kooropatfa/brain"* — and let it walk you through the steps.
+>
+> Either way, know this up front: **part of the install runs a script downloaded from the internet,
+> in your terminal.** As a rule you should **never** run a script from the internet without checking
+> it first — that's true for *any* script from *anywhere*, not only this one.
+>
+> We promise this script is safe, and here is **exactly what it does** — nothing hidden:
+>
+> 1. Installs **Node**, **Git**, and the **GitHub CLI**, only if you don't already have them.
+> 2. Installs **Claude Code**, only if you don't already have it.
+> 3. Opens your **web browser** so you can sign in to GitHub (no password or token to copy anywhere).
+> 4. Prints the two commands you then run inside Claude Code to switch the skill on.
+>
+> That's the entire script — it does not touch your files, your keys, or anything else.
+>
+> **Still: verify it yourself before running it.** Paste the command to your AI agent and ask
+> *"is this safe? what does it actually do?"*, or download the script and read it (it's short — both
+> [`install.sh`](./install.sh) and [`install.ps1`](./install.ps1) sit at the repo root). **Trust, but
+> verify** — for this and for every command in this README.
+
+---
+
 This repository is the Brain **engine**: the mechanism only. **No knowledge lives here.** Your
 knowledge lives in *your own* repo — a private, pure-data **knowledge repo** that this engine
 scaffolds, syncs, classifies and files into. One installed plugin serves any number of Brains on a
@@ -52,7 +79,9 @@ Two ingestion modes, chosen per Brain in its `brain.config.yml`:
 
 ## Install the plugin (once per machine)
 
-Prerequisites (Node, Git, GitHub CLI, Claude Code + browser sign-in) — one paste in a terminal:
+Prerequisites (Node, Git, GitHub CLI, Claude Code + browser sign-in) — one paste in a terminal.
+This is the script described in the warning box above. **Good habit: before running it, ask your
+agent *"is this command safe?"*** — for this command and any other you paste into a terminal.
 
 macOS / Linux:
 ```bash

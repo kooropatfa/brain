@@ -2,143 +2,199 @@
 
 **Your coding agent, plugged into the company's shared knowledge.**
 
-Install once. From then on, every coding session your agent:
-- **knows what the company knows** — it reads the Brain before doing non-trivial work, so it doesn't
-  re-litigate decisions or miss a spec;
-- **remembers the good stuff** — when something worth keeping comes up, just say *"add this to the
-  brain"* (a decision, a doc, a PDF, an email, a Slack thread, a screenshot, a rough idea) and it files
-  it for you. No format to learn, no repo to find.
+---
+
+> ## ⚠️ Please read this before installing
+>
+> The easiest and safest way to install this is to **ask your AI agent** (Claude Code) to do it for
+> you — just say *"install the brain skill from kooropatfa/brain"* and let it walk you through the
+> steps below.
+>
+> Either way, one thing to know up front: **part of the install runs a script downloaded from the
+> internet, in your terminal.** As a rule you should **never** run a script from the internet without
+> checking it first — that's true for *any* script from *anywhere*, not just this one.
+>
+> We promise this script is safe, and here is **exactly what it does** — nothing hidden:
+>
+> 1. Installs **Node**, **Git**, and the **GitHub CLI**, only if you don't already have them.
+> 2. Installs **Claude Code**, only if you don't already have it.
+> 3. Opens your **web browser** so you can sign in to GitHub (no password or token to copy anywhere).
+> 4. Prints the two commands you then run inside Claude Code to switch the skill on.
+>
+> That's the entire script. It does not touch your files, your keys, or anything else.
+>
+> **Still — verify it yourself before running it.** The simplest way: paste the command to your AI
+> agent and ask *"is this safe? what does it actually do?"* Or download the script and read it (it's
+> short). **Trust, but verify.**
+
+---
+
+## What you get
+
+Install it once. After that, every time you work with your AI agent it will:
+
+- **Know what the company already knows** — it reads the shared Brain before doing real work, so it
+  won't miss a decision or redo something that's already settled.
+- **Remember the good stuff for you** — when something worth keeping comes up, just say
+  *"add this to the brain"* and point at it (a note, a PDF, an email, a Slack thread, a screenshot, or
+  even *"that thing we just figured out"*). It writes it up and files it. No format to learn.
 
 You stop being the person who has to remember to write things down.
 
 ---
 
-## Install (2 minutes, once per machine)
+## Install (about 2 minutes, once per computer)
 
-Two steps: a one-paste prerequisites command, then two lines inside Claude Code. **No token to
-copy, no symlink, no files to edit.** Same on every OS.
+Two small steps. **A good habit: before running any of these commands, ask your agent *"is this
+command safe?"*** — never paste something into a terminal you haven't checked.
 
-### Step 1 — prerequisites (one paste)
+### Step 1 — set up the basics (one command)
 
-This installs Node + Git + the GitHub CLI (if missing) and signs you in to GitHub **in your browser**
-(no token). Pick your OS:
+This is the script described in the box at the very top — the one we just told you exactly what it
+does. Pick your system:
 
-<details open><summary><b>Windows</b> (PowerShell — Start menu → type "PowerShell" → Enter)</summary>
+<details open><summary><b>Windows</b> — open PowerShell (Start menu → type "PowerShell" → Enter)</summary>
 
 ```powershell
 irm https://raw.githubusercontent.com/kooropatfa/brain/main/install.ps1 | iex
 ```
-Nervous about running a script from the internet (or your antivirus blocks it)? Download and read it
-first: `irm https://raw.githubusercontent.com/kooropatfa/brain/main/install.ps1 -OutFile install.ps1`,
-open it in Notepad, then `powershell -ExecutionPolicy Bypass -File .\install.ps1`.
+
+Want to read it before running it? Download it first, open `install.ps1` in Notepad, then run it:
+```powershell
+irm https://raw.githubusercontent.com/kooropatfa/brain/main/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
 </details>
 
-<details><summary><b>macOS / Linux</b> (Terminal)</summary>
+<details><summary><b>macOS / Linux</b> — open the Terminal app</summary>
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kooropatfa/brain/main/install.sh | bash
 ```
+
+Want to read it before running it? Download it first, read it, then run it:
+```bash
+curl -fsSL https://raw.githubusercontent.com/kooropatfa/brain/main/install.sh -o install.sh
+less install.sh   # read it (press q to quit), then:
+bash install.sh
+```
 </details>
 
-### Step 2 — turn on the skill (inside Claude Code)
+### Step 2 — switch the skill on (inside Claude Code)
 
-Open Claude Code and run these two lines (identical on every OS):
+Open Claude Code and run these two lines (the same on every system):
 
 ```
 /plugin marketplace add kooropatfa/brain
 /plugin install brain@brain
 ```
 
-Done. Open a project and your agent picks it up automatically. The skill ships in the plugin (not in
-any Brain clone), so it auto-updates from the marketplace — nothing to keep current manually.
+That's the install. Open any project and your agent picks it up on its own. The skill ships in the
+plugin and updates itself from the marketplace — nothing for you to maintain.
 
-### Connect an existing Brain
+### Connect your Brain
 
-If you already have a Brain repo (or are joining a team Brain), connect it without cloning manually:
+If your team already has a Brain (or you're joining one), connect it — your agent can run this for you,
+or you can run it yourself (ask *"is this safe?"* first if you like):
 
 ```
 brain-sync connect --repo <owner/name>
 ```
 
-This clones the Brain to `~/.brain/<name>`; the clone brings its own `brain.config.yml` (created by
-`brain-init`). Connect warns if it is missing — without it, `read`/`config`/`contribute --brain` will
-refuse to run. Then bind it in your project: add a `.brains.yml` at the project root with `use: [<name>]`.
+This downloads the Brain to `~/.brain/<name>`. Then, in each project where you want to use it, add a
+small file named `.brains.yml` at the project root containing:
 
-### Verify it worked
-
-Ask your agent in Claude Code: *"is my brain connected?"* — or run:
-
-```
-node <plugin>/tools/brain-sync/brain-sync.mjs config --brain <name>
-```
-Expect a line of JSON with `"repo":"<owner/name>"` and `"token_present":true`.
-
-<details><summary><b>Advanced / fallback</b> (no plugin, or a persistent token)</summary>
-
-**No plugin (locked-down machine / no marketplace):** install the plugin from the engine repo and copy
-the skill from there (not from a Brain clone — knowledge clones contain no engine code; re-copy after
-each engine update):
-```bash
-git clone https://github.com/kooropatfa/brain.git ~/.local/brain-engine
-mkdir -p ~/.claude/skills && cp -R ~/.local/brain-engine/skills/brain ~/.claude/skills/brain
-```
-```powershell
-# Windows (no admin): copy, or a directory junction
-git clone https://github.com/kooropatfa/brain.git $env:USERPROFILE\.local\brain-engine
-Copy-Item -Recurse -Force $env:USERPROFILE\.local\brain-engine\skills\brain $env:USERPROFILE\.claude\skills\brain
-# or: cmd /c mklink /J "%USERPROFILE%\.claude\skills\brain" "%USERPROFILE%\.local\brain-engine\skills\brain"
-```
-
-**Persistent token instead of `gh auth login`** (CI / headless / no browser): set `GH_TOKEN` (a
-`repo`+`workflow` classic PAT, or fine-grained Contents+PRs RW on your Brain repo).
-- Windows: `[Environment]::SetEnvironmentVariable('GH_TOKEN','<token>','User')` then reopen the terminal.
-  (`setx GH_TOKEN "<token>"` works too but truncates tokens over 1024 chars.)
-- macOS/Linux: `export GH_TOKEN=<token>` in your shell profile.
-</details>
-
----
-
-## Using it (there's almost nothing to learn)
-
-- **Read:** just work. The agent consults the Brain on its own when it matters.
-- **Save:** say it in plain words — *"add this to the brain"*, *"throw this in the brain"*, *"save this
-  to the Brain"*. Point at anything: a note, a PDF, an email, a Notion/Slack link, a screenshot, or even
-  *"that thing we just figured out."* The agent writes it up, opens a PR, and the pipeline files it.
-- **That's the loop.** You'll get a PR link as confirmation. You never touch the format or merge anything.
-
----
-
-## Make it yours (optional)
-
-Everything works with **zero config**. To tweak it, copy `brain.example.yml` to either:
-- `~/.config/brain.yml` — **your personal** settings (private; never overwritten by updates), or
-- `<your project>/brain.yml` — settings the **team** shares for that project.
-
-Common tweaks:
 ```yaml
-proactive: false           # don't offer to save things unprompted — I'll ask when I want to
-dimensions: [technical]    # focus my reading on the parts I work in
-auto_pull: false           # I'm often offline; don't pull on every session start
+use: [<name>]
 ```
-Full list of knobs and how the layers stack: `references/configuration.md`.
+
+### Check it worked
+
+Easiest: just ask your agent in Claude Code — **"is my brain connected?"**
+
+(Prefer to check by hand? Run `node <plugin>/tools/brain-sync/brain-sync.mjs config --brain <name>`
+and look for `"token_present":true`.)
 
 ---
 
-## How it fits together
+## How to use it (there's almost nothing to learn)
+
+- **Reading** happens by itself — your agent checks the Brain when it matters. You do nothing.
+- **Saving** is one sentence: *"add this to the brain."* Point at anything — a note, a PDF, an email,
+  a Notion or Slack link, a screenshot, or *"that thing we just figured out."* Your agent writes it up,
+  opens a pull request, and the pipeline files it. You get a link as confirmation and never touch the
+  format or merge anything.
+
+That's the whole loop.
+
+---
+
+## Make it yours (optional — it works with zero setup)
+
+Everything works out of the box. If you *want* to change how it behaves, copy the template
+`brain.example.yml` into one of these spots:
+
+- `~/.config/brain.yml` — **your personal** settings (private; never overwritten by updates), or
+- `<your project>/brain.yml` — settings the **whole team** shares for that project.
+
+The options you're most likely to want:
+
+| Setting | What it does | Default |
+|---|---|---|
+| `proactive: false` | Stop the agent offering to save things on its own — it saves only when you ask. | `true` (it offers) |
+| `auto_pull: false` | Don't refresh the Brain at the start of every session (handy if you're often offline). | `true` (refresh) |
+| `dimensions: [technical]` | Focus the agent's reading on the areas you work in (you still have access to everything). | all areas |
+| `preflight: off` | Hide the one-line "Brain synced" message at session start. | `quiet` |
+| `session_capture: on` | When a session ends, automatically save anything durable that came up. | `off` |
+
+Example `~/.config/brain.yml`:
+```yaml
+proactive: false
+dimensions: [technical, product]
+auto_pull: false
+```
+
+Want the complete list of options and how the layers stack? See `references/configuration.md`.
+
+---
+
+<details><summary><b>How it fits together</b> (for the curious)</summary>
 
 The skill is a thin wrapper over two tools that ship in the **engine plugin** (`kooropatfa/brain`):
 - **brain-sync** (`tools/brain-sync/`) — clones/pulls a Brain knowledge repo and opens PRs from your edits.
 - **the ingestion pipeline** (`.github/workflows/`) — turns a raw capture into a clean, filed, cross-linked note.
 
 The engine (tools, hooks, skill) lives entirely in the installed plugin. Knowledge repos (`~/.brain/<name>`)
-contain only Markdown notes and `brain.config.yml` — no engine code. The plugin auto-updates from the
-marketplace — no separate thing to keep current. (The no-plugin fallback copies the skill from the engine
-repo; re-copy it after an engine update, not from a Brain clone.)
+hold only Markdown notes and `brain.config.yml` — no engine code. The plugin auto-updates from the
+marketplace. One Brain copy per computer per knowledge repo (`~/.brain/<name>`), shared across all your
+projects.
 
-**Architecture:** one Brain clone per machine per knowledge repo (`~/.brain/<name>`), shared across all
-your projects. Not a per-project submodule, not a monorepo — just sibling clones every project can reach.
+</details>
 
-### What's inside
+<details><summary><b>Installing without the plugin</b> (locked-down machine, or no marketplace)</summary>
+
+Same "check it first" rule applies — read any command before you run it, or ask your agent.
+
+Install the plugin from the engine repo and copy the skill from there (re-copy after each engine
+update — no auto-update this way; **don't** copy from a Brain clone, those hold no engine code):
+```bash
+git clone https://github.com/kooropatfa/brain.git ~/.local/brain-engine
+mkdir -p ~/.claude/skills && cp -R ~/.local/brain-engine/skills/brain ~/.claude/skills/brain
+```
+```powershell
+# Windows (no admin): copy, or make a directory junction
+git clone https://github.com/kooropatfa/brain.git $env:USERPROFILE\.local\brain-engine
+Copy-Item -Recurse -Force $env:USERPROFILE\.local\brain-engine\skills\brain $env:USERPROFILE\.claude\skills\brain
+```
+
+**Headless / CI / no browser** — instead of the browser sign-in, set a `GH_TOKEN` environment variable
+(a classic `repo`+`workflow` token, or a fine-grained Contents+PRs read/write token on your Brain repo):
+- Windows: `[Environment]::SetEnvironmentVariable('GH_TOKEN','<token>','User')`, then reopen the terminal.
+- macOS/Linux: add `export GH_TOKEN=<token>` to your shell profile.
+</details>
+
+<details><summary><b>What's inside the skill folder</b></summary>
+
 | File | What it's for |
 |---|---|
 | `SKILL.md` | the agent's instructions (quick start, sync, read, save, the loop) |
@@ -150,3 +206,4 @@ your projects. Not a per-project submodule, not a monorepo — just sibling clon
 | `references/reading-the-brain.md` | how the agent navigates the vault |
 | `references/proactive-capture.md` | when the agent offers to save something |
 | `references/ingestion-behavior.md` | what happens to a capture after you save it |
+</details>
