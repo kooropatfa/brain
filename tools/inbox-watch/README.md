@@ -28,19 +28,25 @@ the Action-side backstop for formatting).
 
 ```bash
 # watch the clone's own _inbox/ (default), scan every 30s
-node <brain>/tools/inbox-watch/inbox-watch.mjs
+node ~/.local/brain-engine/tools/inbox-watch/inbox-watch.mjs --brain ~/.brain/<clone>
 
 # watch a friendlier folder instead
-node <brain>/tools/inbox-watch/inbox-watch.mjs --drop ~/Brain-Inbox
+node ~/.local/brain-engine/tools/inbox-watch/inbox-watch.mjs --brain ~/.brain/<clone> --drop ~/Brain-Inbox
 
 # one scan + push, then exit (for cron-style schedulers and for testing)
-node <brain>/tools/inbox-watch/inbox-watch.mjs --drop ~/Brain-Inbox --once
+node ~/.local/brain-engine/tools/inbox-watch/inbox-watch.mjs --brain ~/.brain/<clone> --drop ~/Brain-Inbox --once
 ```
+
+`<ENGINE>` below refers to the brain engine directory — either `~/.local/brain-engine` (a stable
+`git clone https://github.com/kooropatfa/brain.git ~/.local/brain-engine`, the same path the
+no-plugin install uses) or the installed plugin's directory. The engine contains `tools/` and
+`skills/`; Brain clones under `~/.brain/` do **not** have a `tools/` directory.
 
 | Flag / env | Default | Meaning |
 |---|---|---|
 | `--brain` / `$BRAIN_DIR` | the single clone under `~/.brain` | the Brain clone to commit into |
 | `--drop` / `$DROP_DIR` | the clone's `_inbox/` | the folder to watch |
+| `--engine` / `$BRAIN_ENGINE` | auto-discovered plugin / sibling | the engine dir containing `tools/normalizer` and `tools/inbox-watch`; set explicitly in service files where the shell profile is not loaded |
 | `--interval <s>` | `30` | scan interval |
 | `--once` | — | single scan, then exit |
 
@@ -81,7 +87,9 @@ managers.
   <key>Label</key><string>com.brain.inbox-watch</string>
   <key>ProgramArguments</key><array>
     <string>/usr/local/bin/node</string>
-    <string>/Users/YOU/.brain/brain/tools/inbox-watch/inbox-watch.mjs</string>
+    <string>/Users/YOU/.local/brain-engine/tools/inbox-watch/inbox-watch.mjs</string>
+    <string>--brain</string><string>/Users/YOU/.brain/brain</string>
+    <string>--engine</string><string>/Users/YOU/.local/brain-engine</string>
     <string>--drop</string><string>/Users/YOU/Brain-Inbox</string>
   </array>
   <key>EnvironmentVariables</key><dict>
@@ -107,7 +115,7 @@ tail -f /tmp/inbox-watch.log                                          # watch it
 Description=Brain inbox watcher
 
 [Service]
-ExecStart=/usr/bin/node %h/.brain/brain/tools/inbox-watch/inbox-watch.mjs --drop %h/Brain-Inbox
+ExecStart=/usr/bin/node %h/.local/brain-engine/tools/inbox-watch/inbox-watch.mjs --brain %h/.brain/brain --engine %h/.local/brain-engine --drop %h/Brain-Inbox
 Environment=GH_TOKEN=ghp_your_token_here
 Restart=always
 RestartSec=10
@@ -126,10 +134,10 @@ journalctl --user -u inbox-watch -f
 PowerShell (once, as your user):
 
 ```powershell
-$node  = (Get-Command node).Source
-$brain = "$HOME\.brain\brain"
+$node   = (Get-Command node).Source
+$engine = "$HOME\.local\brain-engine"
 $action  = New-ScheduledTaskAction -Execute $node `
-  -Argument "`"$brain\tools\inbox-watch\inbox-watch.mjs`" --drop `"$HOME\Brain-Inbox`""
+  -Argument "`"$engine\tools\inbox-watch\inbox-watch.mjs`" --brain `"$HOME\.brain\brain`" --engine `"$engine`" --drop `"$HOME\Brain-Inbox`""
 $trigger = New-ScheduledTaskTrigger -AtLogOn
 Register-ScheduledTask -TaskName "Brain inbox-watch" -Action $action -Trigger $trigger
 ```
@@ -142,3 +150,84 @@ Set `GH_TOKEN` as a user environment variable so the task sees it:
 
 > Prefer not to run a resident process? Schedule `--once` on an interval instead (cron /
 > `OnIdle` trigger): same script, batch mode.
+
+## One watcher per Brain
+
+The drop-folder is **per-Brain**: each Brain clone you feed needs its own watcher instance, its
+own `--drop <folder>`, and its own `--brain <clone-dir>`. A single process watches exactly one
+clone and moves files into it — there is no "multi-brain" mode.
+
+**Auto-discovery only works with a single clone.** When `--brain` is omitted and there is
+exactly one clone under `~/.brain`, the watcher uses it automatically. As soon as you add a second
+clone, it errors:
+
+```
+several clones under /Users/YOU/.brain (muzg-knowledge, hooper-brain) — pick one with --brain
+```
+
+So with N brains you must run N service units, each with distinct `--drop` / `--brain` / service
+name values.
+
+**Example: two brains on macOS (launchd)**
+
+`~/Library/LaunchAgents/com.brain.inbox-watch.muzg-knowledge.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.brain.inbox-watch.muzg-knowledge</string>
+  <key>ProgramArguments</key><array>
+    <string>/usr/local/bin/node</string>
+    <string>/Users/YOU/.local/brain-engine/tools/inbox-watch/inbox-watch.mjs</string>
+    <string>--brain</string><string>/Users/YOU/.brain/muzg-knowledge</string>
+    <string>--engine</string><string>/Users/YOU/.local/brain-engine</string>
+    <string>--drop</string><string>/Users/YOU/Drop-personal</string>
+  </array>
+  <key>EnvironmentVariables</key><dict>
+    <key>GH_TOKEN</key><string>ghp_your_token_here</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardErrorPath</key><string>/tmp/inbox-watch-muzg.log</string>
+</dict></plist>
+```
+
+`~/Library/LaunchAgents/com.brain.inbox-watch.hooper-brain.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.brain.inbox-watch.hooper-brain</string>
+  <key>ProgramArguments</key><array>
+    <string>/usr/local/bin/node</string>
+    <string>/Users/YOU/.local/brain-engine/tools/inbox-watch/inbox-watch.mjs</string>
+    <string>--brain</string><string>/Users/YOU/.brain/hooper-brain</string>
+    <string>--engine</string><string>/Users/YOU/.local/brain-engine</string>
+    <string>--drop</string><string>/Users/YOU/Drop-work</string>
+  </array>
+  <key>EnvironmentVariables</key><dict>
+    <key>GH_TOKEN</key><string>ghp_your_token_here</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardErrorPath</key><string>/tmp/inbox-watch-hooper.log</string>
+</dict></plist>
+```
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.brain.inbox-watch.muzg-knowledge.plist
+launchctl load ~/Library/LaunchAgents/com.brain.inbox-watch.hooper-brain.plist
+```
+
+Each unit has a unique `Label`, its own `--brain` clone, and its own `--drop` folder. On Linux,
+give each `systemd` unit a distinct filename (e.g. `inbox-watch-muzg.service`,
+`inbox-watch-hooper.service`) and set the same two flags in `ExecStart`.
+
+**Service environments and the engine plugin.** Service managers (launchd, systemd) do not run
+your shell profile, so the normalizer plugin may not be on PATH. The service examples above already
+include `--engine ~/.local/brain-engine` (or `--engine %h/.local/brain-engine` / `$engine` on the
+respective platform), which points the script at the engine's `tools/normalizer/normalize-drops.mjs`
+without relying on PATH. If you use a different engine path, update that argument (or set
+`$BRAIN_ENGINE`) accordingly — Brain clones under `~/.brain/` do not contain a `tools/` directory.
