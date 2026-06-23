@@ -43,6 +43,8 @@ try {
   Copy-Item -Recurse -Force $source $target
 }
 
+node (Join-Path $engineDir "codex\scripts\install-hooks.mjs") --engine-root $engineDir
+
 $authed = $false
 try { gh auth status 2>$null | Out-Null; if ($LASTEXITCODE -eq 0) { $authed = $true } } catch {}
 if ($authed) {
@@ -53,6 +55,7 @@ if ($authed) {
 }
 
 Write-Host "Installed Codex skill: $target"
+Write-Host "Installed Codex SessionStart hook in: $(Join-Path $codexDir "hooks.json")"
 Write-Host "Engine checkout: $engineDir"
 Write-Host "Next: connect a Brain with:"
 Write-Host "  node `"$target\scripts\brain-tool.mjs`" brain-sync connect --repo <owner/name>"

@@ -27,7 +27,8 @@ BRAIN_TOOL="$SKILL_DIR/scripts/brain-tool.mjs"
 1. Resolve the project binding from `.brains.yml` (`use: [<name>]`), walking up from the current
    project; fall back to `~/.config/brains.yml`. If no binding exists, ask which Brain to use and
    write `.brains.yml` unless the user wants session-only use. `use: []` means stand down.
-2. At session start, sync each bound Brain:
+2. At session start, the Codex installer adds a `SessionStart` hook that syncs each bound Brain.
+   If hooks are disabled or unavailable, run the fallback manually:
    `node "$BRAIN_TOOL" brain-sync read --brain <name>`.
 3. Before non-trivial work, read relevant files under the printed `~/.brain/<name>` path. Start
    from dimension `index.md` files, `decisions/`, and the glossary note.
@@ -119,8 +120,9 @@ Read optional config in this order, later wins:
 4. project `<name>.yml`
 
 Relevant knobs: `auto_pull`, `preflight`, `proactive`, `offer_cap`, `dimensions`, `brain_dir`,
-`token_env`, and `session_capture`. Codex does not run the Claude plugin hooks, so treat
-`session_capture` as unavailable unless a Codex hook has been installed separately.
+`token_env`, and `session_capture`. The Codex installer wires a `SessionStart` sync hook; it does
+not wire `SessionEnd` auto-capture yet, so treat `session_capture` as unavailable unless a separate
+Codex stop hook has been installed.
 
 ## Tool Wrapper
 

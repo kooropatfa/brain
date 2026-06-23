@@ -23,7 +23,8 @@ understanding — read by every person *and every AI agent*, and fed by all of t
 >
 > 1. Installs **Node**, **Git**, and the **GitHub CLI**, only if you don't already have them.
 > 2. For Claude, installs **Claude Code**, only if you don't already have it.
-> 3. For Codex, clones/updates this engine repo and links the Codex skill into `~/.codex/skills/brain`.
+> 3. For Codex, clones/updates this engine repo, links the Codex skill into `~/.codex/skills/brain`,
+>    and adds a `SessionStart` hook to `~/.codex/hooks.json`.
 > 4. Opens your **web browser** so you can sign in to GitHub (no password or token to copy anywhere).
 > 5. For Claude, prints the two commands you then run inside Claude Code to switch the skill on.
 >
@@ -129,7 +130,8 @@ irm https://raw.githubusercontent.com/kooropatfa/brain/main/codex/install.ps1 | 
 ```
 
 This clones or updates the engine at `~/.local/brain-engine`, installs the Codex skill at
-`~/.codex/skills/brain`, and signs in with GitHub CLI if needed.
+`~/.codex/skills/brain`, adds a Codex `SessionStart` hook that syncs bound Brains, and signs in with
+GitHub CLI if needed.
 
 ---
 

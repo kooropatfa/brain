@@ -38,6 +38,8 @@ if [ -e "$SKILLS_DIR/brain" ] || [ -L "$SKILLS_DIR/brain" ]; then
 fi
 ln -s "$ENGINE_DIR/codex/skills/brain" "$SKILLS_DIR/brain"
 
+node "$ENGINE_DIR/codex/scripts/install-hooks.mjs" --engine-root "$ENGINE_DIR"
+
 if gh auth status >/dev/null 2>&1; then
   say "GitHub sign-in already configured."
 else
@@ -46,6 +48,7 @@ else
 fi
 
 say "Installed Codex skill: $SKILLS_DIR/brain"
+say "Installed Codex SessionStart hook in: $CODEX_DIR/hooks.json"
 say "Engine checkout: $ENGINE_DIR"
 say "Next: connect a Brain with:"
 say "  node \"$SKILLS_DIR/brain/scripts/brain-tool.mjs\" brain-sync connect --repo <owner/name>"

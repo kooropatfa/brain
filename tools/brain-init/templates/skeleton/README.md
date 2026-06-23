@@ -19,8 +19,8 @@ writes back to through pull requests. Humans browse it in Obsidian or right here
 lock-in anywhere: the truth is `.md` files in Git, readable by anything — today, and in ten years.
 
 This repo holds **knowledge only**. The machinery that syncs, classifies and files it — the Brain
-**engine** — lives in the [`kooropatfa/brain`](https://github.com/kooropatfa/brain) plugin and is
-installed once per machine.
+**engine** — lives in [`kooropatfa/brain`](https://github.com/kooropatfa/brain) and is installed
+once per machine as an agent integration for Claude Code or Codex.
 
 ---
 
@@ -59,7 +59,9 @@ merge button.
 
 ### The easy way — let your agent install it
 
-You have a coding agent; make it do the work. Paste this into any **Claude Code** session:
+You have a coding agent; make it do the work.
+
+For **Claude Code**, paste this into a Claude Code session:
 
 ```
 Set up the Brain on this machine:
@@ -75,9 +77,29 @@ Set up the Brain on this machine:
    "add this to the brain" to save anything.
 ```
 
+For **Codex**, paste this into a Codex session:
+
+```
+Set up the Brain on this machine for Codex:
+1. Run the Codex installer from https://github.com/kooropatfa/brain
+   (macOS/Linux: codex/install.sh · Windows: codex/install.ps1). It checks for Node, Git and the
+   GitHub CLI, clones the engine to ~/.local/brain-engine, links the Codex skill into
+   ~/.codex/skills/brain, adds a SessionStart hook, and signs me in to GitHub in my browser if needed.
+2. Connect this Brain:
+     node ~/.codex/skills/brain/scripts/brain-tool.mjs brain-sync connect --repo {{REPO}}
+3. Bind this project with .brains.yml:
+     use: [{{NAME}}]
+4. Tell me what to expect: Codex can now use the $brain skill, the Brain lives at
+   ~/.brain/{{NAME}}, and new Codex sessions sync it at start.
+```
+
 The agent runs the scripts, you click through the GitHub browser sign-in when it appears, done.
 
-### By hand (3 minutes, three steps)
+### By hand (3 minutes)
+
+Pick the agent you use on this machine.
+
+#### Claude Code
 
 **Step 1 — prerequisites.** One paste in a terminal. Installs Node + Git + GitHub CLI + Claude Code
 (only what's missing) and signs you in to GitHub **in your browser** — no token to copy.
@@ -108,8 +130,38 @@ brain-sync connect --repo {{REPO}}
 That clones this repo to `~/.brain/{{NAME}}`. Your agent now syncs it at the start of every
 session, and the engine plugin auto-updates — there is nothing to keep current.
 
+#### Codex
+
+**Step 1 — install the Codex skill.** One paste in a terminal. It requires Node + Git + GitHub CLI,
+clones/updates the engine under `~/.local/brain-engine`, links the skill into `~/.codex/skills/brain`,
+adds a `SessionStart` hook to `~/.codex/hooks.json`, and signs you in to GitHub **in your browser**
+if needed.
+
+macOS / Linux (Terminal):
+```bash
+curl -fsSL https://raw.githubusercontent.com/kooropatfa/brain/main/codex/install.sh | bash
+```
+
+Windows (PowerShell — Start menu → type "PowerShell" → Enter):
+```powershell
+irm https://raw.githubusercontent.com/kooropatfa/brain/main/codex/install.ps1 | iex
+```
+
+**Step 2 — connect this Brain.** In a Codex session, ask your agent to run:
+
+```
+node ~/.codex/skills/brain/scripts/brain-tool.mjs brain-sync connect --repo {{REPO}}
+```
+
+Then bind the project with `.brains.yml`:
+
+```yaml
+use: [{{NAME}}]
+```
+
 **Verify:** start a new session in a project bound to this Brain — the greeting includes
-`🧠 Brain synced`. Or just ask your agent: *"is my brain connected?"*
+`🧠 Brain synced` in Claude Code; in Codex, ask the agent to use `$brain` and check whether this
+project is bound and synced. Or just ask your agent: *"is my brain connected?"*
 
 Locked-down machine, CI, no browser? The fallback paths (manual clone, persistent `GH_TOKEN`) are
 in the [engine docs](https://github.com/kooropatfa/brain/blob/main/skills/brain/README.md).
@@ -177,12 +229,12 @@ and AI use words the same way.
 
 ### How agents consume it
 
-One clone per machine — `~/.brain/{{NAME}}` — shared by all of that person's projects. The engine
-plugin syncs it (fast-forward pull) at session start and opens PRs for contributions. Projects
-don't vendor the Brain, don't submodule it, don't copy it — they read the sibling clone and send
-knowledge back as PRs against this repo, decoupled from code PRs. On machines with several Brains,
-the per-project `.brains.yml` (`use: [{{NAME}}]`) decides which Brain a session reads and feeds —
-no Brain acts globally.
+One clone per machine — `~/.brain/{{NAME}}` — shared by all of that person's projects. The installed
+agent integration syncs it (fast-forward pull) at session start or when the skill runs, and opens PRs
+for contributions. Projects don't vendor the Brain, don't submodule it, don't copy it — they read the
+sibling clone and send knowledge back as PRs against this repo, decoupled from code PRs. On machines
+with several Brains, the per-project `.brains.yml` (`use: [{{NAME}}]`) decides which Brain a session
+reads and feeds — no Brain acts globally.
 
 ---
 
