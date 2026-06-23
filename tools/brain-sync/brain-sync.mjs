@@ -42,15 +42,15 @@
 // default GH_TOKEN. If that var is empty, falls back to `gh auth token`. The token is used for BOTH
 // git-over-HTTPS push and `gh` (gh reads GH_TOKEN natively). Never printed, never written to disk.
 //
-// Atomic-commit + Claude co-author trailer: reused from skills/traktor/bin/hub-write.mjs — one
-// focused commit per contribution, trailer appended so machine-written knowledge is attributed.
+// Atomic commit attribution: one focused commit per contribution, with a configurable co-author
+// trailer so Claude, Codex, and future agents can identify themselves truthfully.
 
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const TRAILER = "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>";
+const DEFAULT_TRAILER = "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>";
 const die = (m) => { console.error("brain-sync: " + m); process.exit(1); };
 const log = (m) => console.error("brain-sync: " + m);   // status to stderr; stdout reserved for results
 
@@ -319,7 +319,11 @@ if (command === "contribute") {
   // contribution (this is not a shared worktree; nobody else's work lives here).
   const add = git(["add", "-A"], cfg.brainDir);
   if (add.code !== 0) die(`git add failed: ${add.err}`);
-  const ci = git(["commit", "-m", opt.message, "-m", TRAILER], cfg.brainDir);
+  const trailer = process.env.BRAIN_AGENT_TRAILER ?? DEFAULT_TRAILER;
+  const commitArgs = trailer.trim()
+    ? ["commit", "-m", opt.message, "-m", trailer.trim()]
+    : ["commit", "-m", opt.message];
+  const ci = git(commitArgs, cfg.brainDir);
   if (ci.code !== 0) die(`commit failed: ${ci.err || ci.out}`);
   log(`committed on ${branch}`);
 

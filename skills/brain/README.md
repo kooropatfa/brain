@@ -92,6 +92,20 @@ Open Claude Code and run these two lines (the same on every system):
 That's the install. Open any project and your agent picks it up on its own. The skill ships in the
 plugin and updates itself from the marketplace — nothing for you to maintain.
 
+### Using Codex instead?
+
+Install the native Codex skill from this same engine repo:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kooropatfa/brain/main/codex/install.sh | bash
+```
+
+PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/kooropatfa/brain/main/codex/install.ps1 | iex
+```
+
 ### Connect your Brain
 
 If your team already has a Brain (or you're joining one), connect it — your agent can run this for you,

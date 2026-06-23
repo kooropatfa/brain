@@ -10,7 +10,7 @@ contain no engine code; the plugin is installed once and serves all bound Brains
 |---|---|---|---|
 | `connect --repo <owner/name>` | yes | the local Brain path | First clone of a knowledge repo onto this machine. Clones into `~/.brain/<name>`, scrubs the auth token from origin's remote URL, warns if `brain.config.yml` is absent. No-op (prints path) if already cloned. |
 | `read` | yes | the local Brain path | clone-or-pull. If a clone exists: `git checkout <default_branch>` then `git pull --ff-only`. Else `git clone`. Idempotent. |
-| `contribute --message "<t>"` | yes | the PR URL | branch off default → `git add -A` → commit (+ Claude trailer) → push → `gh pr create`. Never merges. |
+| `contribute --message "<t>"` | yes | the PR URL | branch off default -> `git add -A` -> commit (+ agent trailer) -> push -> `gh pr create`. Never merges. |
 | `path` | no | the local Brain path | resolves `$BRAIN_DIR` else `~/.brain/<name>`. Works even before the clone exists (pure local computation). |
 | `config` | no | JSON | `{config_file, repo, default_branch, token_env, token_present, brain_dir}`. |
 | `help` / `-h` | no | usage | — |
@@ -77,6 +77,7 @@ Only top-level **scalar** keys are read: `repo` (required, `owner/name`), `defau
 | `BRAIN_CONFIG` | explicit path to `brain.config.yml` (fallback mode only) | found by walking up |
 | `BRAIN_DIR` | where the Brain clone lives | `~/.brain/<name>` |
 | `BRAIN_TOKEN_ENV` | name of the env var holding the token | config `token_env` / `GH_TOKEN` |
+| `BRAIN_AGENT_TRAILER` | commit trailer for agent attribution; set to empty to omit | Claude Code trailer |
 
 ## Token handling
 Resolution order: the configured env var (default `$GH_TOKEN`) → fallback `gh auth token`. Used for both

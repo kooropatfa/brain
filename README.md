@@ -1,6 +1,6 @@
 # Brain 🧠
 
-**Shared memory for a team and its AI agents — as a Claude Code plugin.** A Brain is one Git
+**Shared memory for a team and its AI agents — as an installable agent skill.** A Brain is one Git
 repository of plain Markdown holding everything a team knows — decisions, specs, context, market
 understanding — read by every person *and every AI agent*, and fed by all of them.
 
@@ -11,8 +11,9 @@ understanding — read by every person *and every AI agent*, and fed by all of t
 
 > ## ⚠️ Please read this before installing
 >
-> The easiest and safest way to install this is to **ask your AI agent** (Claude Code) to do it for
-> you — *"install the brain skill from kooropatfa/brain"* — and let it walk you through the steps.
+> The easiest and safest way to install this is to **ask your AI agent** to do it for you —
+> *"install the brain skill from kooropatfa/brain for Claude"* or
+> *"install the brain skill from kooropatfa/brain for Codex"* — and let it walk you through the steps.
 >
 > Either way, know this up front: **part of the install runs a script downloaded from the internet,
 > in your terminal.** As a rule you should **never** run a script from the internet without checking
@@ -21,16 +22,18 @@ understanding — read by every person *and every AI agent*, and fed by all of t
 > We promise this script is safe, and here is **exactly what it does** — nothing hidden:
 >
 > 1. Installs **Node**, **Git**, and the **GitHub CLI**, only if you don't already have them.
-> 2. Installs **Claude Code**, only if you don't already have it.
-> 3. Opens your **web browser** so you can sign in to GitHub (no password or token to copy anywhere).
-> 4. Prints the two commands you then run inside Claude Code to switch the skill on.
+> 2. For Claude, installs **Claude Code**, only if you don't already have it.
+> 3. For Codex, clones/updates this engine repo and links the Codex skill into `~/.codex/skills/brain`.
+> 4. Opens your **web browser** so you can sign in to GitHub (no password or token to copy anywhere).
+> 5. For Claude, prints the two commands you then run inside Claude Code to switch the skill on.
 >
-> That's the entire script — it does not touch your files, your keys, or anything else.
+> That's the entire script — it does not read or modify your project files or private keys.
 >
 > **Still: verify it yourself before running it.** Paste the command to your AI agent and ask
-> *"is this safe? what does it actually do?"*, or download the script and read it (it's short — both
-> [`install.sh`](./install.sh) and [`install.ps1`](./install.ps1) sit at the repo root). **Trust, but
-> verify** — for this and for every command in this README.
+> *"is this safe? what does it actually do?"*, or download the script and read it. The Claude
+> installers sit at the repo root ([`install.sh`](./install.sh), [`install.ps1`](./install.ps1));
+> the Codex installers sit under [`codex/`](./codex/). **Trust, but verify** — for this and for every
+> command in this README.
 
 ---
 
@@ -77,7 +80,12 @@ Two ingestion modes, chosen per Brain in its `brain.config.yml`:
 
 ---
 
-## Install the plugin (once per machine)
+## Install the agent integration (once per machine)
+
+Choose the coding agent you use on this machine. Both integrations use the same engine and the same
+Brain knowledge repos under `~/.brain/<name>`.
+
+### Claude Code
 
 Prerequisites (Node, Git, GitHub CLI, Claude Code + browser sign-in) — one paste in a terminal.
 This is the script described in the warning box above. **Good habit: before running it, ask your
@@ -103,8 +111,25 @@ Then, inside Claude Code (identical on every OS):
 /plugin install brain@brain
 ```
 
-That's the only install you'll ever do — the plugin auto-updates, and one plugin serves every
+That's the only Claude install you'll ever do — the plugin auto-updates, and one plugin serves every
 Brain on the machine.
+
+### Codex
+
+Codex uses a native Codex skill plus the same engine checkout.
+
+macOS / Linux:
+```bash
+curl -fsSL https://raw.githubusercontent.com/kooropatfa/brain/main/codex/install.sh | bash
+```
+
+Windows (PowerShell):
+```powershell
+irm https://raw.githubusercontent.com/kooropatfa/brain/main/codex/install.ps1 | iex
+```
+
+This clones or updates the engine at `~/.local/brain-engine`, installs the Codex skill at
+`~/.codex/skills/brain`, and signs in with GitHub CLI if needed.
 
 ---
 
@@ -154,12 +179,13 @@ against it. Unbound projects get asked once and the answer is saved to `.brains.
 ## Map of the repo
 
 ```
-brain/                              ← the engine: a Claude Code plugin, zero knowledge inside
+brain/                              ← the engine: agent integrations, zero knowledge inside
 ├─ README.md                       ← you are here
 ├─ SETUP.md                        ← create + connect your own Brain, step by step
 ├─ install.sh · install.ps1        ← machine setup (prerequisites + browser sign-in)
 ├─ .claude-plugin/                 ← plugin + marketplace manifests (fixed name: brain)
 ├─ skills/brain/                   ← the agent skill: sync, read-before-work, captures
+├─ codex/                          ← Codex installer + native Codex skill
 ├─ hooks/                          ← session-start sync + session-end capture
 ├─ tools/brain-sync/               ← clone/pull/PR helper (--brain <name>, connect)
 ├─ tools/brain-init/               ← scaffolder: generates a NEW knowledge repo from templates
