@@ -6,9 +6,10 @@
 
 > ## ⚠️ Please read this before installing
 >
-> The easiest and safest way to install this is to **ask your AI agent** (Claude Code) to do it for
-> you — just say *"install the brain skill from kooropatfa/brain"* and let it walk you through the
-> steps below.
+> The easiest and safest way to install this is to **ask your AI agent** to do it for you — say
+> *"install the brain skill from kooropatfa/brain for Claude"* or
+> *"install the brain skill from kooropatfa/brain for Codex"* and let it walk you through the steps
+> below.
 >
 > Either way, one thing to know up front: **part of the install runs a script downloaded from the
 > internet, in your terminal.** As a rule you should **never** run a script from the internet without
@@ -17,11 +18,13 @@
 > We promise this script is safe, and here is **exactly what it does** — nothing hidden:
 >
 > 1. Installs **Node**, **Git**, and the **GitHub CLI**, only if you don't already have them.
-> 2. Installs **Claude Code**, only if you don't already have it.
-> 3. Opens your **web browser** so you can sign in to GitHub (no password or token to copy anywhere).
-> 4. Prints the two commands you then run inside Claude Code to switch the skill on.
+> 2. For Claude, installs **Claude Code**, only if you don't already have it.
+> 3. For Codex, clones/updates the engine repo, links the skill into `~/.codex/skills/brain`, and
+>    adds a `SessionStart` hook to `~/.codex/hooks.json`.
+> 4. Opens your **web browser** so you can sign in to GitHub (no password or token to copy anywhere).
+> 5. For Claude, prints the two commands you then run inside Claude Code to switch the skill on.
 >
-> That's the entire script. It does not touch your files, your keys, or anything else.
+> That's the entire script. It does not read or modify your project files or private keys.
 >
 > **Still — verify it yourself before running it.** The simplest way: paste the command to your AI
 > agent and ask *"is this safe? what does it actually do?"* Or download the script and read it (it's
@@ -48,7 +51,9 @@ You stop being the person who has to remember to write things down.
 Two small steps. **A good habit: before running any of these commands, ask your agent *"is this
 command safe?"*** — never paste something into a terminal you haven't checked.
 
-### Step 1 — set up the basics (one command)
+### Claude Code
+
+#### Step 1 — set up the basics
 
 This is the script described in the box at the very top — the one we just told you exactly what it
 does. Pick your system:
@@ -80,7 +85,7 @@ bash install.sh
 ```
 </details>
 
-### Step 2 — switch the skill on (inside Claude Code)
+#### Step 2 — switch the skill on
 
 Open Claude Code and run these two lines (the same on every system):
 
@@ -92,9 +97,11 @@ Open Claude Code and run these two lines (the same on every system):
 That's the install. Open any project and your agent picks it up on its own. The skill ships in the
 plugin and updates itself from the marketplace — nothing for you to maintain.
 
-### Using Codex instead?
+### Codex
 
-Install the native Codex skill from this same engine repo:
+Install the native Codex skill from this same engine repo. It clones/updates the engine at
+`~/.local/brain-engine`, links the skill into `~/.codex/skills/brain`, and adds a `SessionStart`
+hook so bound Brains sync when a Codex session starts.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kooropatfa/brain/main/codex/install.sh | bash
@@ -111,8 +118,16 @@ irm https://raw.githubusercontent.com/kooropatfa/brain/main/codex/install.ps1 | 
 If your team already has a Brain (or you're joining one), connect it — your agent can run this for you,
 or you can run it yourself (ask *"is this safe?"* first if you like):
 
+Claude Code:
+
 ```
 brain-sync connect --repo <owner/name>
+```
+
+Codex:
+
+```
+node ~/.codex/skills/brain/scripts/brain-tool.mjs brain-sync connect --repo <owner/name>
 ```
 
 This downloads the Brain to `~/.brain/<name>`. Then, in each project where you want to use it, add a
@@ -124,10 +139,23 @@ use: [<name>]
 
 ### Check it worked
 
-Easiest: just ask your agent in Claude Code — **"is my brain connected?"**
+Easiest: just ask your agent — **"is my brain connected?"**
 
-(Prefer to check by hand? Run `node <plugin>/tools/brain-sync/brain-sync.mjs config --brain <name>`
-and look for `"token_present":true`.)
+Prefer to check by hand?
+
+Claude Code:
+
+```
+node <plugin>/tools/brain-sync/brain-sync.mjs config --brain <name>
+```
+
+Codex:
+
+```
+node ~/.codex/skills/brain/scripts/brain-tool.mjs brain-sync config --brain <name>
+```
+
+Look for `"token_present":true`.
 
 ---
 
@@ -174,18 +202,18 @@ Want the complete list of options and how the layers stack? See `references/conf
 
 <details><summary><b>How it fits together</b> (for the curious)</summary>
 
-The skill is a thin wrapper over two tools that ship in the **engine plugin** (`kooropatfa/brain`):
+The skill is a thin wrapper over two tools that ship in the **Brain engine** (`kooropatfa/brain`):
 - **brain-sync** (`tools/brain-sync/`) — clones/pulls a Brain knowledge repo and opens PRs from your edits.
 - **the ingestion pipeline** (`.github/workflows/`) — turns a raw capture into a clean, filed, cross-linked note.
 
-The engine (tools, hooks, skill) lives entirely in the installed plugin. Knowledge repos (`~/.brain/<name>`)
-hold only Markdown notes and `brain.config.yml` — no engine code. The plugin auto-updates from the
-marketplace. One Brain copy per computer per knowledge repo (`~/.brain/<name>`), shared across all your
-projects.
+The engine (tools, hooks, skill) lives outside knowledge repos. Knowledge repos (`~/.brain/<name>`)
+hold only Markdown notes and `brain.config.yml` — no engine code. Claude installs it as a plugin;
+Codex installs it as a native Codex skill plus `SessionStart` hook. One Brain copy per computer per
+knowledge repo (`~/.brain/<name>`), shared across all your projects.
 
 </details>
 
-<details><summary><b>Installing without the plugin</b> (locked-down machine, or no marketplace)</summary>
+<details><summary><b>Installing without the Claude plugin</b> (locked-down machine, or no marketplace)</summary>
 
 Same "check it first" rule applies — read any command before you run it, or ask your agent.
 
