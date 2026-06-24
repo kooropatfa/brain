@@ -86,6 +86,10 @@ Two ingestion modes, chosen per Brain in its `brain.config.yml`:
 Choose the coding agent you use on this machine. Both integrations use the same engine and the same
 Brain knowledge repos under `~/.brain/<name>`.
 
+Pick one integration per machine. The installer records the choice in
+`~/.brain/agent-integration.json`; re-running the same installer refreshes it, while installing a
+different agent integration refuses with a message naming the currently selected agent.
+
 ### Claude Code
 
 Prerequisites (Node, Git, GitHub CLI, Claude Code + browser sign-in) — one paste in a terminal.
@@ -208,6 +212,7 @@ member-facing README from
 | create and run your own Brain | [`SETUP.md`](./SETUP.md) |
 | scaffold a knowledge repo (all flags) | [`tools/brain-init/README.md`](./tools/brain-init/README.md) |
 | install / use the agent skill, all fallbacks | [`skills/brain/README.md`](./skills/brain/README.md) |
+| integrate another model agent | [`AGENT_INTEGRATIONS.md`](./AGENT_INTEGRATIONS.md) |
 | see the capture schema | [`tools/brain-init/templates/skeleton/_inbox/README.md`](./tools/brain-init/templates/skeleton/_inbox/README.md) |
 | understand the sync & PR helper | [`tools/brain-sync/README.md`](./tools/brain-sync/README.md) |
 | understand the ingestion classifier | [`tools/classifier/README.md`](./tools/classifier/README.md) |

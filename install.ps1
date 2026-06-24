@@ -22,6 +22,28 @@ function Have($cmd) { [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
 function Say($msg)  { Write-Host "  $msg" -ForegroundColor Cyan }
 function Ok($msg)   { Write-Host "  [ok] $msg" -ForegroundColor Green }
 function Warn($msg) { Write-Host "  [!]  $msg" -ForegroundColor Yellow }
+function ClaimAgent($agent, $label) {
+  $stateDir = if ($env:BRAIN_STATE_DIR) { $env:BRAIN_STATE_DIR } else { Join-Path $env:USERPROFILE ".brain" }
+  $stateFile = Join-Path $stateDir "agent-integration.json"
+  if (Test-Path $stateFile) {
+    $existing = ""
+    try { $existing = (Get-Content $stateFile -Raw | ConvertFrom-Json).agent } catch {}
+    if ($existing -eq $agent) {
+      Ok "Brain already selected for $label ($stateFile)"
+      return
+    }
+    if ($existing) {
+      Warn "Brain is already installed for '$existing' on this machine."
+      Warn "Refusing to install it for '$agent' as well. Choose one agent integration at a time."
+      Warn "To switch intentionally, remove $stateFile and uninstall the previous integration first."
+      throw "Brain integration already installed for $existing"
+    }
+  }
+  New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+  @{ agent = $agent; label = $label; installed_at = (Get-Date).ToUniversalTime().ToString("o") } |
+    ConvertTo-Json | Set-Content -Encoding UTF8 $stateFile
+  Ok "Brain selected for $label ($stateFile)"
+}
 
 Write-Host ""
 Write-Host "Brain - setup (Windows)" -ForegroundColor White
@@ -58,6 +80,8 @@ Ensure gh   GitHub.cli        "https://cli.github.com/"
 $machinePath = [Environment]::GetEnvironmentVariable('Path','Machine')
 $userPath    = [Environment]::GetEnvironmentVariable('Path','User')
 $env:Path = "$machinePath;$userPath"
+
+ClaimAgent "claude" "Claude Code"
 
 # --- 2. Claude Code -----------------------------------------------------------
 if (Have claude) {

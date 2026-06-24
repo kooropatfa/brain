@@ -99,6 +99,10 @@ The agent runs the scripts, you click through the GitHub browser sign-in when it
 
 Pick the agent you use on this machine.
 
+Pick one integration per machine. The installer records the choice in
+`~/.brain/agent-integration.json`; re-running the same installer refreshes it, while installing a
+different agent integration refuses with a message naming the currently selected agent.
+
 #### Claude Code
 
 **Step 1 — prerequisites.** One paste in a terminal. Installs Node + Git + GitHub CLI + Claude Code

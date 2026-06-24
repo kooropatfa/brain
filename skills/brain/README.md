@@ -51,6 +51,10 @@ You stop being the person who has to remember to write things down.
 Two small steps. **A good habit: before running any of these commands, ask your agent *"is this
 command safe?"*** — never paste something into a terminal you haven't checked.
 
+Pick one integration per computer. The installer records the choice in
+`~/.brain/agent-integration.json`; re-running the same installer refreshes it, while installing a
+different agent integration refuses with a message naming the currently selected agent.
+
 ### Claude Code
 
 #### Step 1 — set up the basics
