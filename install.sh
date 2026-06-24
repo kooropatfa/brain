@@ -20,6 +20,26 @@ say()  { printf '  \033[36m%s\033[0m\n' "$1"; }
 ok()   { printf '  \033[32m[ok] %s\033[0m\n' "$1"; }
 warn() { printf '  \033[33m[!]  %s\033[0m\n' "$1"; }
 have() { command -v "$1" >/dev/null 2>&1; }
+register_agent() {
+  local agent="$1" label="$2"
+  local helper="" tmp_helper="" raw_base="${BRAIN_ENGINE_RAW_URL:-https://raw.githubusercontent.com/kooropatfa/brain/main}"
+  if [[ -n "${BRAIN_ENGINE_ROOT:-}" && -f "$BRAIN_ENGINE_ROOT/tools/agent-integration/register.mjs" ]]; then
+    helper="$BRAIN_ENGINE_ROOT/tools/agent-integration/register.mjs"
+  elif [[ -f "tools/agent-integration/register.mjs" ]]; then
+    helper="tools/agent-integration/register.mjs"
+  else
+    tmp_helper="$(mktemp)"
+    curl -fsSL "$raw_base/tools/agent-integration/register.mjs" -o "$tmp_helper"
+    helper="$tmp_helper"
+  fi
+  if node "$helper" --agent "$agent" --label "$label"; then
+    [[ -z "$tmp_helper" ]] || rm -f "$tmp_helper"
+  else
+    local status=$?
+    [[ -z "$tmp_helper" ]] || rm -f "$tmp_helper"
+    return "$status"
+  fi
+}
 
 printf '\nBrain — setup (macOS / Linux)\n=====================================\n'
 
@@ -67,6 +87,8 @@ if ! have gh; then
     *)    warn "install gh from https://cli.github.com/ and re-run." ;;
   esac
 fi
+
+register_agent "claude" "Claude Code"
 
 # --- Claude Code --------------------------------------------------------------
 if have claude; then

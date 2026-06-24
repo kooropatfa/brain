@@ -24,6 +24,10 @@ const sync = (args, home) => spawnSync("node", [BIN, ...args], {
   encoding: "utf8", cwd: home,
   env: { ...process.env, HOME: home, BRAIN_CONFIG: "", BRAIN_DIR: "" },
 });
+const syncWithEnv = (args, home, env) => spawnSync("node", [BIN, ...args], {
+  encoding: "utf8", cwd: home,
+  env: { ...process.env, HOME: home, BRAIN_CONFIG: "", BRAIN_DIR: "", ...env },
+});
 
 test("path --brain prints ~/.brain/<name> with no project config anywhere", () => {
   const home = fakeHome();
@@ -127,4 +131,26 @@ test("config legacy walk-up rejects dot-dot repo basename from brain.config.yml"
   });
   assert.equal(r.status, 1, "expected exit 1 for dot-dot repo basename");
   assert.match(r.stderr, /not a valid brain name/);
+});
+
+test("contribute uses BRAIN_AGENT_TRAILER when committing", () => {
+  const home = fakeHome({ mybrain: "you/mybrain" });
+  const dir = path.join(home, ".brain", "mybrain");
+  const init = spawnSync("git", ["init", "-b", "main", dir], { encoding: "utf8" });
+  if (init.status !== 0) return; // older git without -b support; keep this suite portable.
+  spawnSync("git", ["remote", "add", "origin", "https://github.com/you/mybrain.git"], { encoding: "utf8", cwd: dir });
+  spawnSync("git", ["config", "user.email", "test@example.com"], { encoding: "utf8", cwd: dir });
+  spawnSync("git", ["config", "user.name", "Test Agent"], { encoding: "utf8", cwd: dir });
+  fs.writeFileSync(path.join(dir, "note.md"), "hello\n");
+
+  const trailer = "Co-Authored-By: OpenAI Codex <codex@openai.com>";
+  const r = syncWithEnv([
+    "contribute", "--brain", "mybrain", "--message", "Capture: test", "--dry-run",
+  ], home, { BRAIN_AGENT_TRAILER: trailer });
+  assert.equal(r.status, 0, r.stderr);
+
+  const log = spawnSync("git", ["log", "-1", "--format=%B"], { encoding: "utf8", cwd: dir });
+  assert.equal(log.status, 0, log.stderr);
+  assert.match(log.stdout, /Capture: test/);
+  assert.match(log.stdout, /Co-Authored-By: OpenAI Codex <codex@openai.com>/);
 });

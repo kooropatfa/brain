@@ -1,0 +1,4 @@
+interface:
+  display_name: "Brain"
+  short_description: "Use shared Brain knowledge vaults from Codex"
+  default_prompt: "Use $brain to sync the bound Brain, read relevant knowledge, and save durable context when needed."

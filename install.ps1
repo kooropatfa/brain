@@ -22,6 +22,26 @@ function Have($cmd) { [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
 function Say($msg)  { Write-Host "  $msg" -ForegroundColor Cyan }
 function Ok($msg)   { Write-Host "  [ok] $msg" -ForegroundColor Green }
 function Warn($msg) { Write-Host "  [!]  $msg" -ForegroundColor Yellow }
+function RegisterAgent($agent, $label) {
+  $rawBase = if ($env:BRAIN_ENGINE_RAW_URL) { $env:BRAIN_ENGINE_RAW_URL } else { "https://raw.githubusercontent.com/kooropatfa/brain/main" }
+  $helper = $null
+  $tmpHelper = $null
+  if ($env:BRAIN_ENGINE_ROOT -and (Test-Path (Join-Path $env:BRAIN_ENGINE_ROOT "tools\agent-integration\register.mjs"))) {
+    $helper = Join-Path $env:BRAIN_ENGINE_ROOT "tools\agent-integration\register.mjs"
+  } elseif (Test-Path "tools\agent-integration\register.mjs") {
+    $helper = "tools\agent-integration\register.mjs"
+  } else {
+    $tmpHelper = [System.IO.Path]::GetTempFileName()
+    Invoke-WebRequest -UseBasicParsing -Uri "$rawBase/tools/agent-integration/register.mjs" -OutFile $tmpHelper
+    $helper = $tmpHelper
+  }
+  try {
+    node $helper --agent $agent --label $label
+    if ($LASTEXITCODE -ne 0) { throw "Brain integration registration failed" }
+  } finally {
+    if ($tmpHelper) { Remove-Item -Force $tmpHelper -ErrorAction SilentlyContinue }
+  }
+}
 
 Write-Host ""
 Write-Host "Brain - setup (Windows)" -ForegroundColor White
@@ -58,6 +78,8 @@ Ensure gh   GitHub.cli        "https://cli.github.com/"
 $machinePath = [Environment]::GetEnvironmentVariable('Path','Machine')
 $userPath    = [Environment]::GetEnvironmentVariable('Path','User')
 $env:Path = "$machinePath;$userPath"
+
+RegisterAgent "claude" "Claude Code"
 
 # --- 2. Claude Code -----------------------------------------------------------
 if (Have claude) {

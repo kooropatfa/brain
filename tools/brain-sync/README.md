@@ -61,7 +61,7 @@ node tools/brain-sync/brain-sync.mjs contribute --brain <name> --message "Add AD
 ```
 
 `contribute` creates a branch off the Brain's default branch, commits all local changes in the clone
-(with the Claude co-author trailer), pushes, and opens a PR. It prints the **PR URL** on stdout. It
+(with an agent co-author trailer), pushes, and opens a PR. It prints the **PR URL** on stdout. It
 never merges — review and merge happen in the Brain repo, by a human (per the Brain deploy gate).
 
 Options: `--branch <name>` (default `brain-sync/<slug>-<hash>`), `--body <text>`, `--base <branch>`
@@ -96,6 +96,7 @@ Environment overrides:
 | `BRAIN_CONFIG`    | explicit path to `brain.config.yml` (walk-up mode)   | found by walking up      |
 | `BRAIN_DIR`       | where the Brain is cloned (the "known local path")   | `~/.brain/<name>`        |
 | `BRAIN_TOKEN_ENV` | name of the env var that holds the token             | config `token_env` / `GH_TOKEN` |
+| `BRAIN_AGENT_TRAILER` | commit trailer for agent attribution; set to empty to omit | Claude Code trailer |
 
 ## Auth & token handling
 
@@ -106,7 +107,7 @@ the duration of the push/pull and then scrubbed from `.git/config`.
 
 ## Design notes
 
-- **Pure Node, no dependencies** — atomic commits with the Claude co-author trailer; nothing to
+- **Pure Node, no dependencies** — atomic commits with an agent co-author trailer; nothing to
   `npm install`.
 - **Scalar-only config reader.** The helper reads only the top-level scalar keys it needs (`repo`,
   `default_branch`, `token_env`). It deliberately does **not** parse YAML arrays or block lists, so it
