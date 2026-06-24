@@ -81,14 +81,14 @@ Two ingestion modes, chosen per Brain in its `brain.config.yml`:
 
 ---
 
-## Install the agent integration (once per machine)
+## Install agent integrations (once per machine)
 
-Choose the coding agent you use on this machine. Both integrations use the same engine and the same
-Brain knowledge repos under `~/.brain/<name>`.
+Install the coding agent adapters you use on this machine. Claude Code, Codex, and future adapters
+share the same engine and the same Brain knowledge repos under `~/.brain/<name>`.
 
-Pick one integration per machine. The installer records the choice in
-`~/.brain/agent-integration.json`; re-running the same installer refreshes it, while installing a
-different agent integration refuses with a message naming the currently selected agent.
+The installers register adapters in `~/.brain/agent-integrations.json`. Re-running the same
+installer refreshes that adapter without duplicating hooks or skills. Installing another adapter
+adds it to the registry and leaves the existing adapters in place.
 
 ### Claude Code
 

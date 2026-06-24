@@ -20,27 +20,25 @@ say()  { printf '  \033[36m%s\033[0m\n' "$1"; }
 ok()   { printf '  \033[32m[ok] %s\033[0m\n' "$1"; }
 warn() { printf '  \033[33m[!]  %s\033[0m\n' "$1"; }
 have() { command -v "$1" >/dev/null 2>&1; }
-claim_agent() {
+register_agent() {
   local agent="$1" label="$2"
-  local state_dir="${BRAIN_STATE_DIR:-$HOME/.brain}"
-  local state_file="$state_dir/agent-integration.json"
-  if [[ -f "$state_file" ]]; then
-    local existing
-    existing="$(node -e "try{process.stdout.write(JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).agent||'')}catch{}" "$state_file")"
-    if [[ "$existing" == "$agent" ]]; then
-      ok "Brain already selected for $label ($state_file)"
-      return 0
-    fi
-    if [[ -n "$existing" ]]; then
-      warn "Brain is already installed for '$existing' on this machine."
-      warn "Refusing to install it for '$agent' as well. Choose one agent integration at a time."
-      warn "To switch intentionally, remove $state_file and uninstall the previous integration first."
-      exit 1
-    fi
+  local helper="" tmp_helper="" raw_base="${BRAIN_ENGINE_RAW_URL:-https://raw.githubusercontent.com/kooropatfa/brain/main}"
+  if [[ -n "${BRAIN_ENGINE_ROOT:-}" && -f "$BRAIN_ENGINE_ROOT/tools/agent-integration/register.mjs" ]]; then
+    helper="$BRAIN_ENGINE_ROOT/tools/agent-integration/register.mjs"
+  elif [[ -f "tools/agent-integration/register.mjs" ]]; then
+    helper="tools/agent-integration/register.mjs"
+  else
+    tmp_helper="$(mktemp)"
+    curl -fsSL "$raw_base/tools/agent-integration/register.mjs" -o "$tmp_helper"
+    helper="$tmp_helper"
   fi
-  mkdir -p "$state_dir"
-  node -e "require('fs').writeFileSync(process.argv[1], JSON.stringify({agent:process.argv[2], label:process.argv[3], installed_at:new Date().toISOString()}, null, 2)+'\n')" "$state_file" "$agent" "$label"
-  ok "Brain selected for $label ($state_file)"
+  if node "$helper" --agent "$agent" --label "$label"; then
+    [[ -z "$tmp_helper" ]] || rm -f "$tmp_helper"
+  else
+    local status=$?
+    [[ -z "$tmp_helper" ]] || rm -f "$tmp_helper"
+    return "$status"
+  fi
 }
 
 printf '\nBrain — setup (macOS / Linux)\n=====================================\n'
@@ -90,7 +88,7 @@ if ! have gh; then
   esac
 fi
 
-claim_agent "claude" "Claude Code"
+register_agent "claude" "Claude Code"
 
 # --- Claude Code --------------------------------------------------------------
 if have claude; then

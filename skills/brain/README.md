@@ -51,9 +51,10 @@ You stop being the person who has to remember to write things down.
 Two small steps. **A good habit: before running any of these commands, ask your agent *"is this
 command safe?"*** — never paste something into a terminal you haven't checked.
 
-Pick one integration per computer. The installer records the choice in
-`~/.brain/agent-integration.json`; re-running the same installer refreshes it, while installing a
-different agent integration refuses with a message naming the currently selected agent.
+Install whichever adapters you use on this computer. Claude Code and Codex can coexist: both use the
+same engine checkout, the same `brain-sync`, and the same Brain clones under `~/.brain/<name>`.
+Installers record adapters in `~/.brain/agent-integrations.json`; re-running one refreshes that
+adapter without duplicating hooks or skills.
 
 ### Claude Code
 
@@ -212,8 +213,8 @@ The skill is a thin wrapper over two tools that ship in the **Brain engine** (`k
 
 The engine (tools, hooks, skill) lives outside knowledge repos. Knowledge repos (`~/.brain/<name>`)
 hold only Markdown notes and `brain.config.yml` — no engine code. Claude installs it as a plugin;
-Codex installs it as a native Codex skill plus `SessionStart` hook. One Brain copy per computer per
-knowledge repo (`~/.brain/<name>`), shared across all your projects.
+Codex installs it as a native Codex skill plus `SessionStart` hook. Both adapters can be installed
+on the same computer and read the same Brain clones, shared across all your projects.
 
 </details>
 

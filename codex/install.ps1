@@ -2,27 +2,9 @@
 $ErrorActionPreference = 'Stop'
 
 function Have($cmd) { [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
-function ClaimAgent($agent, $label) {
-  $stateDir = if ($env:BRAIN_STATE_DIR) { $env:BRAIN_STATE_DIR } else { Join-Path $env:USERPROFILE ".brain" }
-  $stateFile = Join-Path $stateDir "agent-integration.json"
-  if (Test-Path $stateFile) {
-    $existing = ""
-    try { $existing = (Get-Content $stateFile -Raw | ConvertFrom-Json).agent } catch {}
-    if ($existing -eq $agent) {
-      Write-Host "Brain already selected for $label ($stateFile). Refreshing installation."
-      return
-    }
-    if ($existing) {
-      Write-Host "Brain is already installed for '$existing' on this machine."
-      Write-Host "Refusing to install it for '$agent' as well. Choose one agent integration at a time."
-      Write-Host "To switch intentionally, remove $stateFile and uninstall the previous integration first."
-      throw "Brain integration already installed for $existing"
-    }
-  }
-  New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
-  @{ agent = $agent; label = $label; installed_at = (Get-Date).ToUniversalTime().ToString("o") } |
-    ConvertTo-Json | Set-Content -Encoding UTF8 $stateFile
-  Write-Host "Brain selected for $label ($stateFile)"
+function RegisterAgent($agent, $label) {
+  node (Join-Path $engineDir "tools\agent-integration\register.mjs") --agent $agent --label $label
+  if ($LASTEXITCODE -ne 0) { throw "Brain integration registration failed" }
 }
 
 $engineDir = if ($env:BRAIN_ENGINE_ROOT) { $env:BRAIN_ENGINE_ROOT } else { Join-Path $env:USERPROFILE ".local\brain-engine" }
@@ -38,14 +20,14 @@ foreach ($cmd in @("node", "git", "gh")) {
   }
 }
 
-ClaimAgent "codex" "Codex"
-
 if (Test-Path (Join-Path $engineDir ".git")) {
   git -C $engineDir pull --ff-only
 } else {
   New-Item -ItemType Directory -Force -Path (Split-Path $engineDir) | Out-Null
   git clone $repoUrl $engineDir
 }
+
+RegisterAgent "codex" "Codex"
 
 New-Item -ItemType Directory -Force -Path $skillsDir | Out-Null
 $target = Join-Path $skillsDir "brain"

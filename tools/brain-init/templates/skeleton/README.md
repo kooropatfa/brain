@@ -20,7 +20,7 @@ lock-in anywhere: the truth is `.md` files in Git, readable by anything — toda
 
 This repo holds **knowledge only**. The machinery that syncs, classifies and files it — the Brain
 **engine** — lives in [`kooropatfa/brain`](https://github.com/kooropatfa/brain) and is installed
-once per machine as an agent integration for Claude Code or Codex.
+once per machine as agent integrations for Claude Code, Codex, or future adapters.
 
 ---
 
@@ -97,11 +97,10 @@ The agent runs the scripts, you click through the GitHub browser sign-in when it
 
 ### By hand (3 minutes)
 
-Pick the agent you use on this machine.
-
-Pick one integration per machine. The installer records the choice in
-`~/.brain/agent-integration.json`; re-running the same installer refreshes it, while installing a
-different agent integration refuses with a message naming the currently selected agent.
+Install whichever agent adapters you use on this machine. Claude Code and Codex can coexist: both
+use the same engine, the same `brain-sync`, and the same Brain clone at `~/.brain/{{NAME}}`.
+Installers record adapters in `~/.brain/agent-integrations.json`; re-running one refreshes that
+adapter without duplicating hooks or skills.
 
 #### Claude Code
 
@@ -233,12 +232,12 @@ and AI use words the same way.
 
 ### How agents consume it
 
-One clone per machine — `~/.brain/{{NAME}}` — shared by all of that person's projects. The installed
-agent integration syncs it (fast-forward pull) at session start or when the skill runs, and opens PRs
-for contributions. Projects don't vendor the Brain, don't submodule it, don't copy it — they read the
-sibling clone and send knowledge back as PRs against this repo, decoupled from code PRs. On machines
-with several Brains, the per-project `.brains.yml` (`use: [{{NAME}}]`) decides which Brain a session
-reads and feeds — no Brain acts globally.
+One clone per machine — `~/.brain/{{NAME}}` — shared by all of that person's projects and installed
+agent adapters. Each adapter syncs it (fast-forward pull) at session start or when the skill runs,
+and opens PRs for contributions. Projects don't vendor the Brain, don't submodule it, don't copy it
+— they read the sibling clone and send knowledge back as PRs against this repo, decoupled from code
+PRs. On machines with several Brains, the per-project `.brains.yml` (`use: [{{NAME}}]`) decides
+which Brain a session reads and feeds — no Brain acts globally.
 
 ---
 

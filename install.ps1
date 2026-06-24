@@ -22,27 +22,25 @@ function Have($cmd) { [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
 function Say($msg)  { Write-Host "  $msg" -ForegroundColor Cyan }
 function Ok($msg)   { Write-Host "  [ok] $msg" -ForegroundColor Green }
 function Warn($msg) { Write-Host "  [!]  $msg" -ForegroundColor Yellow }
-function ClaimAgent($agent, $label) {
-  $stateDir = if ($env:BRAIN_STATE_DIR) { $env:BRAIN_STATE_DIR } else { Join-Path $env:USERPROFILE ".brain" }
-  $stateFile = Join-Path $stateDir "agent-integration.json"
-  if (Test-Path $stateFile) {
-    $existing = ""
-    try { $existing = (Get-Content $stateFile -Raw | ConvertFrom-Json).agent } catch {}
-    if ($existing -eq $agent) {
-      Ok "Brain already selected for $label ($stateFile)"
-      return
-    }
-    if ($existing) {
-      Warn "Brain is already installed for '$existing' on this machine."
-      Warn "Refusing to install it for '$agent' as well. Choose one agent integration at a time."
-      Warn "To switch intentionally, remove $stateFile and uninstall the previous integration first."
-      throw "Brain integration already installed for $existing"
-    }
+function RegisterAgent($agent, $label) {
+  $rawBase = if ($env:BRAIN_ENGINE_RAW_URL) { $env:BRAIN_ENGINE_RAW_URL } else { "https://raw.githubusercontent.com/kooropatfa/brain/main" }
+  $helper = $null
+  $tmpHelper = $null
+  if ($env:BRAIN_ENGINE_ROOT -and (Test-Path (Join-Path $env:BRAIN_ENGINE_ROOT "tools\agent-integration\register.mjs"))) {
+    $helper = Join-Path $env:BRAIN_ENGINE_ROOT "tools\agent-integration\register.mjs"
+  } elseif (Test-Path "tools\agent-integration\register.mjs") {
+    $helper = "tools\agent-integration\register.mjs"
+  } else {
+    $tmpHelper = [System.IO.Path]::GetTempFileName()
+    Invoke-WebRequest -UseBasicParsing -Uri "$rawBase/tools/agent-integration/register.mjs" -OutFile $tmpHelper
+    $helper = $tmpHelper
   }
-  New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
-  @{ agent = $agent; label = $label; installed_at = (Get-Date).ToUniversalTime().ToString("o") } |
-    ConvertTo-Json | Set-Content -Encoding UTF8 $stateFile
-  Ok "Brain selected for $label ($stateFile)"
+  try {
+    node $helper --agent $agent --label $label
+    if ($LASTEXITCODE -ne 0) { throw "Brain integration registration failed" }
+  } finally {
+    if ($tmpHelper) { Remove-Item -Force $tmpHelper -ErrorAction SilentlyContinue }
+  }
 }
 
 Write-Host ""
@@ -81,7 +79,7 @@ $machinePath = [Environment]::GetEnvironmentVariable('Path','Machine')
 $userPath    = [Environment]::GetEnvironmentVariable('Path','User')
 $env:Path = "$machinePath;$userPath"
 
-ClaimAgent "claude" "Claude Code"
+RegisterAgent "claude" "Claude Code"
 
 # --- 2. Claude Code -----------------------------------------------------------
 if (Have claude) {
