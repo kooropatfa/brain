@@ -9,6 +9,8 @@ agent.
 - Claude Code: installed through the Claude plugin marketplace, with hooks under `hooks/`.
 - Codex: installed through `codex/install.*`, with a native Codex skill under `codex/skills/brain`
   and a Codex `SessionStart` hook in `~/.codex/hooks.json`.
+- Google Anti Gravity: planned as the Google-side adapter. Do not assume a Gemini CLI path; use the
+  integration surface Anti Gravity exposes.
 
 Multiple interactive agent integrations can be installed on the same machine. They all share the
 same engine checkout, the same `brain-sync`, the same Brain clones under `~/.brain/<name>`, and the
@@ -49,33 +51,35 @@ Re-running the same installer refreshes that integration. Running a different in
 new integration and prints the existing installed adapters; it must not block just because another
 agent is already present.
 
-## Starting Gemini Work Without Touching This PR
+## Starting Google Anti Gravity Work Without Touching This PR
 
-Use a separate git worktree. If Gemini work depends on the Codex foundation in PR #6, branch from the
-PR branch:
-
-```bash
-git -C /Users/m/projects/brain fetch origin
-git -C /Users/m/projects/brain worktree add /Users/m/projects/brain-gemini -b gemini-integration origin/codex-skill-support
-cd /Users/m/projects/brain-gemini
-```
-
-If Gemini work should be independent of PR #6, branch from `origin/main` instead:
+Use a separate git worktree. If Google Anti Gravity work depends on the Codex foundation in PR #6,
+branch from the PR branch:
 
 ```bash
 git -C /Users/m/projects/brain fetch origin
-git -C /Users/m/projects/brain worktree add /Users/m/projects/brain-gemini -b gemini-integration origin/main
-cd /Users/m/projects/brain-gemini
+git -C /Users/m/projects/brain worktree add /Users/m/projects/brain-antigravity -b antigravity-integration origin/codex-skill-support
+cd /Users/m/projects/brain-antigravity
 ```
 
-Rules for the Gemini worktree:
+If Google Anti Gravity work should be independent of PR #6, branch from `origin/main` instead:
 
-- Do not edit `/Users/m/projects/brain` while working in `/Users/m/projects/brain-gemini`.
-- Use a separate branch and PR, for example `gemini-integration`.
-- Keep Gemini-specific files under `gemini/` unless a shared helper is genuinely agent-neutral.
-- Reuse `tools/brain-sync/brain-sync.mjs`; do not create a Gemini-specific sync client.
-- Reuse `hooks/session-start-sync.mjs` through a thin Gemini hook adapter if Gemini has a different
-  hook API.
+```bash
+git -C /Users/m/projects/brain fetch origin
+git -C /Users/m/projects/brain worktree add /Users/m/projects/brain-antigravity -b antigravity-integration origin/main
+cd /Users/m/projects/brain-antigravity
+```
+
+Rules for the Google Anti Gravity worktree:
+
+- Do not edit `/Users/m/projects/brain` while working in `/Users/m/projects/brain-antigravity`.
+- Use a separate branch and PR, for example `antigravity-integration`.
+- Keep Google Anti Gravity-specific files under `antigravity/` unless a shared helper is genuinely
+  agent-neutral.
+- Reuse `tools/brain-sync/brain-sync.mjs`; do not create a Google-specific sync client.
+- Reuse `hooks/session-start-sync.mjs` through a thin Anti Gravity hook/extension/task adapter if
+  Anti Gravity has a different integration API.
+- Do not add instructions that depend on `gemini` being available as a CLI command.
 - Reuse `tools/agent-integration/register.mjs` and the
   `~/.brain/agent-integrations.json` registry contract.
 
@@ -120,7 +124,7 @@ Every new agent integration should implement these pieces:
    Set `BRAIN_AGENT_TRAILER` when calling `brain-sync contribute`, for example:
 
    ```bash
-   BRAIN_AGENT_TRAILER="Co-Authored-By: Google Gemini <gemini@google.com>" \
+   BRAIN_AGENT_TRAILER="Co-Authored-By: Google Anti Gravity <antigravity@google.com>" \
      node tools/brain-sync/brain-sync.mjs contribute --brain <name> --message "Capture: <title>"
    ```
 
@@ -145,8 +149,8 @@ Every new agent integration should implement these pieces:
 
 ## Tractor / Parallel Agents
 
-Tractor may run Claude, Codex, Gemini, or other adapters as parallel review agents. Do not create
-per-agent Brain storage. Every review agent should read the same engine repo, the same
+Tractor may run Claude, Codex, Google Anti Gravity, or other adapters as parallel review agents. Do
+not create per-agent Brain storage. Every review agent should read the same engine repo, the same
 `~/.brain/<name>` clone, and the same `.brains.yml` policy for the project under review.
 
 Parallel reads are fine. Writes remain PR-based: if two agents capture knowledge at the same time,
