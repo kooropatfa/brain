@@ -25,8 +25,9 @@ understanding — read by every person *and every AI agent*, and fed by all of t
 > 2. For Claude, installs **Claude Code**, only if you don't already have it.
 > 3. For Codex, clones/updates this engine repo, links the Codex skill into `~/.codex/skills/brain`,
 >    and adds a `SessionStart` hook to `~/.codex/hooks.json`.
-> 4. Opens your **web browser** so you can sign in to GitHub (no password or token to copy anywhere).
-> 5. For Claude, prints the two commands you then run inside Claude Code to switch the skill on.
+> 4. Registers the installed adapter in `~/.brain/agent-integrations.json`.
+> 5. Opens your **web browser** so you can sign in to GitHub (no password or token to copy anywhere).
+> 6. For Claude, prints the two commands you then run inside Claude Code to switch the skill on.
 >
 > That's the entire script — it does not read or modify your project files or private keys.
 >
@@ -40,8 +41,8 @@ understanding — read by every person *and every AI agent*, and fed by all of t
 
 This repository is the Brain **engine**: the mechanism only. **No knowledge lives here.** Your
 knowledge lives in *your own* repo — a private, pure-data **knowledge repo** that this engine
-scaffolds, syncs, classifies and files into. One installed plugin serves any number of Brains on a
-machine; each project picks its Brain via a `.brains.yml` binding. No lock-in anywhere: the truth
+scaffolds, syncs, classifies and files into. Installed agent adapters serve any number of Brains on
+a machine; each project picks its Brain via a `.brains.yml` binding. No lock-in anywhere: the truth
 is `.md` files in Git, readable by anything — today, and in ten years.
 
 ---
@@ -188,6 +189,7 @@ against it. Unbound projects get asked once and the answer is saved to `.brains.
 brain/                              ← the engine: agent integrations, zero knowledge inside
 ├─ README.md                       ← you are here
 ├─ SETUP.md                        ← create + connect your own Brain, step by step
+├─ CHANGELOG.md                    ← notable engine changes
 ├─ install.sh · install.ps1        ← machine setup (prerequisites + browser sign-in)
 ├─ .claude-plugin/                 ← plugin + marketplace manifests (fixed name: brain)
 ├─ skills/brain/                   ← the agent skill: sync, read-before-work, captures
@@ -210,6 +212,7 @@ member-facing README from
 | You want to… | Read |
 |---|---|
 | create and run your own Brain | [`SETUP.md`](./SETUP.md) |
+| see what changed recently | [`CHANGELOG.md`](./CHANGELOG.md) |
 | scaffold a knowledge repo (all flags) | [`tools/brain-init/README.md`](./tools/brain-init/README.md) |
 | install / use the agent skill, all fallbacks | [`skills/brain/README.md`](./skills/brain/README.md) |
 | integrate another model agent | [`AGENT_INTEGRATIONS.md`](./AGENT_INTEGRATIONS.md) |
