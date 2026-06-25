@@ -21,8 +21,9 @@
 > 2. For Claude, installs **Claude Code**, only if you don't already have it.
 > 3. For Codex, clones/updates the engine repo, links the skill into `~/.codex/skills/brain`, and
 >    adds a `SessionStart` hook to `~/.codex/hooks.json`.
-> 4. Opens your **web browser** so you can sign in to GitHub (no password or token to copy anywhere).
-> 5. For Claude, prints the two commands you then run inside Claude Code to switch the skill on.
+> 4. Registers the installed adapter in `~/.brain/agent-integrations.json`.
+> 5. Opens your **web browser** so you can sign in to GitHub (no password or token to copy anywhere).
+> 6. For Claude, prints the two commands you then run inside Claude Code to switch the skill on.
 >
 > That's the entire script. It does not read or modify your project files or private keys.
 >
