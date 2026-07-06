@@ -1,5 +1,7 @@
 # Reading the Brain
 
+> No Brain yet (no `.brains.yml` binding)? First-run onboarding — connect or create — is SKILL.md §0.5.
+
 brain-sync has **no search**. After `read`, you have the whole vault as Markdown at `$BRAIN` — read it
 with the file tools and `grep`. Load only the slice you need into context.
 
