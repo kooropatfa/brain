@@ -177,6 +177,15 @@ jobs:
           UNCLEAR: ${{ steps.normalize.outputs.unclear }}
         run: |
           set -euo pipefail
+          # The prompt is written straight to a FILE on the runner and never travels through a step
+          # output or an env var. It embeds every capture's `body_raw`, so a single big capture (a
+          # 300 KB meeting transcript is normal) blows two hard kernel/Actions limits at once:
+          #   * `env:` + argv share ARG_MAX — a prompt-sized env var makes the NEXT step fail at
+          #     exec() with "An error occurred trying to start process '/usr/bin/bash' ... Argument
+          #     list too long", before a single line of its script runs (the observed failure);
+          #   * MAX_ARG_STRLEN caps ONE argv string at 128 KB, so passing it positionally as
+          #     `claude -p "$(cat ...)"` cannot work either, at any ARG_MAX.
+          # A file has neither limit. The classifier step reads it on stdin.
           # The spec/prompt that is the Action's brain.
           PROMPT_BODY="$(cat .engine/tools/classifier/PROMPT.md)"
           # Per-capture context packs (config-driven dimensions + parsed frontmatter + filing targets),
@@ -189,7 +198,6 @@ jobs:
           done <<< "${{ steps.detect.outputs.captures }}"
 
           {
-            echo "prompt<<__PROMPT_EOF__"
             echo "$PROMPT_BODY"
             echo ""
             echo "---"
@@ -219,8 +227,8 @@ jobs:
               echo "$UNCLEAR"
               echo '```'
             fi
-            echo "__PROMPT_EOF__"
-          } >> "$GITHUB_OUTPUT"
+          } > "$RUNNER_TEMP/ingest-prompt.txt"
+          echo "classifier prompt: $(wc -c < "$RUNNER_TEMP/ingest-prompt.txt") bytes -> $RUNNER_TEMP/ingest-prompt.txt"
 
       - name: Run the headless classifier (claude -p)
         if: steps.detect.outputs.count != '0'
@@ -231,7 +239,8 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ github.token }}   # gh CLI auth for the PR + issues; git ops use the same token
-          PROMPT: ${{ steps.prompt.outputs.prompt }}
+          # NO `PROMPT:` here on purpose — see "Build the classifier prompt". An env var holding the
+          # prompt counts against ARG_MAX and kills this step at exec() time.
         run: |
           set -euo pipefail
           # NOTE: we drive `claude -p` headless directly rather than anthropics/claude-code-action@v1,
@@ -246,10 +255,12 @@ jobs:
 
           npm install -g @anthropic-ai/claude-code
 
-          # Prompt goes to a FILE and is passed positionally (claude [options] [prompt]) — NOT piped
-          # on stdin. Piping the prompt while the CLI also wants stdin for anything else deadlocks
-          # (the first run hung right after npm install with zero output — catalogue C3).
-          printf '%s' "$PROMPT" > /tmp/ingest-prompt.txt
+          # The prompt arrives as a file from the previous step and is fed on STDIN — with `-p` and
+          # no positional prompt, the CLI reads stdin as the prompt. This is the only route that
+          # survives a large capture (argv and env both cap out; a file does not). The earlier
+          # deadlock this code guarded against (catalogue C3) was the unanswered permission prompt,
+          # now fixed by --permission-mode bypassPermissions, not by stdin itself.
+          test -s "$RUNNER_TEMP/ingest-prompt.txt" || { echo "classifier prompt file is empty"; exit 1; }
 
           # Headless-safe invocation:
           #   --bare              skip hooks/LSP/keychain/auto-discovery; auth strictly via ANTHROPIC_API_KEY
@@ -257,11 +268,12 @@ jobs:
           #       file edits, so Bash(git/gh/node) calls would still block on an approval prompt nobody
           #       answers in CI (the suspected hang). Safe here: isolated, ephemeral CI runner.
           #   --max-budget-usd    cost/runaway-loop ceiling (this CLI has no --max-turns)
-          #   prompt passed positionally via "$(cat …)"
-          claude -p "$(cat /tmp/ingest-prompt.txt)" \
+          #   prompt fed on stdin (see above)
+          claude -p \
             --bare \
             --model claude-opus-4-8 \
             --permission-mode bypassPermissions \
             --allowedTools "Read,Write,Edit,Glob,Grep,Bash(node:*),Bash(git:*),Bash(gh:*)" \
             --max-budget-usd 5 \
-            --output-format text
+            --output-format text \
+            < "$RUNNER_TEMP/ingest-prompt.txt"
